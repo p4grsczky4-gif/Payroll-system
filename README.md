@@ -1,66 +1,37 @@
-# HR- og lønnssystem Demo v1.2.0
+# HR- og lønnssystem Demo v1.3.0
 
-## Nytt: stillingskoder og standardlønn
+## Personvernendring
 
-Under `Oppsett` finnes nå en egen tabell for:
+De 130 fiktive ansattprofilene er fjernet helt fra appkoden. GitHub-repositoryet inneholder nå bare programkode, stillingskoder, tjenester og lønnsarter.
 
-- stillingskode
-- stillingsnavn
-- tjeneste
-- standard årslønn
-- lønnsform
-- ukentlig arbeidstid
-- antall tilknyttede ansatte
+Ansattdata opprettes manuelt eller importeres fra en lokal Excel-fil. Excel-filen leses i nettleseren og sendes ikke til GitHub eller appen.
 
-Årslønnen kan endres direkte i tabellen. Når du trykker
-`Lagre alle satser`, oppdateres alle ansatte som bruker standardlønn
-fra den aktuelle stillingskoden.
+## Excel-import
 
-## Lærlinger
+Appen leser disse arkene:
 
-Demoen har disse lærlingkodene:
+- `Ansatte` – obligatorisk
+- `Stillingskoder` – valgfritt
+- `Variabel lønn` – valgfritt
 
-- 9501 – Lærling, BUA-fag
-- 9502 – Lærling, helsefag
-- 9503 – Lærling, administrasjonsfag
+Ansatte med samme ansattnummer blir oppdatert. Nye ansattnumre blir opprettet.
 
-Alle tre har samme standard demo-årslønn på kr 330 000.
+Under `Oppsett → Data, Excel og backup` kan du:
 
-De eksisterende HR-demoprofilene kobles automatisk til riktig
-stillingskode når den nye versjonen åpnes.
+- importere ansatte fra Excel
+- laste ned en tom Excel-mal
+- importere og eksportere JSON-backup
+- fjerne tidligere HR-demoprofiler som fortsatt ligger lokalt fra eldre versjoner
 
-## Ansattregister
+## Viktig ved oppdatering
 
-På den ansatte kan du:
+Å bytte GitHub-filene sletter ikke data som allerede ligger i nettleserens IndexedDB. Hvis de gamle 130 profilene fortsatt vises, åpner du `Oppsett` og trykker `Fjern tidligere HR-demoprofiler lokalt`.
 
-1. velge stillingskode
-2. bruke standardlønn fra stillingskoden
-3. se årslønnen fylles inn automatisk
-4. fjerne avhukingen og registrere en individuell årslønn
+## Publisering
 
-En individuell årslønn blir ikke endret når lønnstabellen oppdateres.
+1. Ta JSON-backup hvis du har lokale data du vil beholde.
+2. Erstatt de gamle filene i GitHub med innholdet i ZIP-filen.
+3. Åpne GitHub Pages-adressen én gang med `?v=130` på slutten.
+4. Importer Excel-filen gjennom appen. Ikke last Excel-filen opp til GitHub.
 
-## Nye demo-stillingskoder
-
-- 9501 – Lærling, BUA-fag
-- 9502 – Lærling, helsefag
-- 9503 – Lærling, administrasjonsfag
-- 9601 – HR-konsulent, vikar
-- 9701 – Tilkallingsvikar
-- 9801 – HR-rådgiver
-
-Du kan opprette flere stillingskoder og redigere eksisterende koder.
-
-## Oppdatering på GitHub Pages
-
-1. Ta gjerne backup under `Oppsett`.
-2. Pakk ut ZIP-filen.
-3. Erstatt de gamle filene i GitHub-repositoryet.
-4. Last opp alle filene og hele `icons`-mappen.
-5. Commit endringene.
-6. Åpne appen én gang med `?v=120` på slutten av adressen.
-
-Eksisterende lokale data beholdes.
-
-Etter endring av standardlønn må en åpen lønnskjøring beregnes på nytt
-for at nye lønnsslipper og rapporter skal bruke den nye satsen.
+Excel-importen bruker SheetJS Community Edition 0.20.3 fra den offisielle SheetJS-CDN-en. Selve regnearket behandles lokalt i nettleseren.
