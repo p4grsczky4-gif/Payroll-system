@@ -102,10 +102,6 @@ tr:last-child td{border-bottom:0}.money{text-align:right;font-variant-numeric:ta
 .position-code-label{display:inline-flex;align-items:center;gap:6px;font-weight:900;font-variant-numeric:tabular-nums}
 .position-code-summary{display:grid;gap:3px}
 .position-code-summary small{color:var(--muted)}
-.role-context[hidden]{display:none!important}
-.subtotal-row td{background:var(--primary-soft);font-weight:900;border-top:2px solid color-mix(in srgb,var(--primary) 35%,var(--line))}
-.report-group-start td{border-top:2px solid var(--line)}
-.readonly-note{background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:11px 12px;color:var(--muted)}
 
 </style>
 </head>
@@ -124,7 +120,7 @@ tr:last-child td{border-bottom:0}.money{text-align:right;font-variant-numeric:ta
         <button class="nav-item active" data-view="dashboard"><span>⌂</span>Oversikt</button>
         <button class="nav-item" data-view="employees"><span>♙</span>Ansatte</button>
         <button class="nav-item" data-view="variable"><span>＋</span>Variabel lønn</button>
-        <button class="nav-item" data-view="leader"><span>✓</span>Leder</button>
+        <button class="nav-item" data-view="consultant"><span>✓</span>Lønnskonsulent</button>
         <button class="nav-item" data-view="runs"><span>▶</span>Lønnskjøring</button>
         <button class="nav-item" data-view="payslips"><span>▤</span>Lønnsslipper</button>
         <button class="nav-item" data-view="reports"><span>▥</span>Rapporter</button>
@@ -155,10 +151,6 @@ tr:last-child td{border-bottom:0}.money{text-align:right;font-variant-numeric:ta
               <option value="employee">Ansatt</option>
             </select>
           </label>
-          <label class="role-switch role-context" id="contextSwitch" hidden>
-            <span id="contextLabel">Vis som</span>
-            <select id="contextSelect"></select>
-          </label>
           <button id="themeBtn" class="icon-btn" title="Bytt tema">◐</button>
         </div>
       </header>
@@ -186,13 +178,13 @@ const df = new Intl.DateTimeFormat('nb-NO');
 
 const titles = {
   dashboard:'Oversikt', employees:'Ansattregister', variable:'Registrer variabel lønn',
-  leader:'Leder', runs:'Lønnskjøring', payslips:'Lønnsslipper',
+  consultant:'Lønnskonsulent', runs:'Lønnskjøring', payslips:'Lønnsslipper',
   reports:'Rapporter', economy:'Økonomi', settings:'Oppsett'
 };
 
 let state;
 let currentView = 'dashboard';
-let reportType = 'resource';
+let reportType = 'journal';
 let saveTimer;
 
 const $ = (s, root=document) => root.querySelector(s);
@@ -211,79 +203,6 @@ const pct = v => `${Number(v||0).toLocaleString('nb-NO')} %`;
 const today = () => new Date().toISOString().slice(0,10);
 const monthNow = () => new Date().toISOString().slice(0,7);
 const inMonth = (date, period) => date?.slice(0,7) === period;
-
-const ROLE_VIEWS = {
-  admin:['dashboard','employees','variable','leader','runs','payslips','reports','economy','settings'],
-  payroll:['dashboard','employees','runs','payslips','reports','economy','settings'],
-  leader:['dashboard','employees','variable','leader','reports'],
-  employee:['dashboard','variable','payslips']
-};
-function allowedViews(){ return ROLE_VIEWS[state?.ui?.role] || ROLE_VIEWS.admin; }
-function roleCan(view){ return allowedViews().includes(view); }
-function resourceNumber(e){ return String(e?.resourceNo || e?.employeeNo || '–'); }
-function availableManagers(){
-  return [...new Set((state?.employees||[]).map(e=>String(e.manager||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'nb'));
-}
-function ensureRoleContext(){
-  state.ui ||= {};
-  const employees=state.employees||[];
-  if(!state.ui.selectedEmployeeId || !employees.some(e=>e.id===state.ui.selectedEmployeeId)){
-    state.ui.selectedEmployeeId=employees[0]?.id||'';
-  }
-  const managers=availableManagers();
-  if(!state.ui.selectedManager || !managers.includes(state.ui.selectedManager)){
-    state.ui.selectedManager=managers[0]||'';
-  }
-}
-function currentRoleEmployee(){ ensureRoleContext(); return employeeById(state.ui.selectedEmployeeId); }
-function scopedEmployees(){
-  const role=state.ui.role;
-  if(role==='employee'){
-    const e=currentRoleEmployee(); return e?[e]:[];
-  }
-  if(role==='leader'){
-    ensureRoleContext();
-    return state.employees.filter(e=>String(e.manager||'')===String(state.ui.selectedManager||''));
-  }
-  return state.employees;
-}
-function scopedEmployeeIds(){ return new Set(scopedEmployees().map(e=>e.id)); }
-function scopedVariableEntries(){
-  const role=state.ui.role, ids=scopedEmployeeIds();
-  if(role==='admin'||role==='payroll') return state.variableEntries;
-  return state.variableEntries.filter(v=>ids.has(v.employeeId));
-}
-function scopedPayslips(slips){
-  const role=state.ui.role;
-  if(role==='admin'||role==='payroll') return slips;
-  const ids=scopedEmployeeIds();
-  return slips.filter(p=>ids.has(p.employeeId));
-}
-function applyRoleUi(){
-  ensureRoleContext();
-  $$('.nav-item').forEach(button=>{
-    button.hidden=!roleCan(button.dataset.view);
-  });
-  const contextSwitch=$('#contextSwitch'),contextSelect=$('#contextSelect'),contextLabel=$('#contextLabel');
-  if(!contextSwitch||!contextSelect||!contextLabel)return;
-  const role=state.ui.role;
-  contextSelect.innerHTML='';
-  if(role==='employee'){
-    contextSwitch.hidden=false;contextLabel.textContent='Ansatt';
-    state.employees.slice().sort((a,b)=>a.name.localeCompare(b.name,'nb')).forEach(e=>{
-      const option=document.createElement('option');option.value=e.id;option.textContent=`${e.employeeNo} – ${e.name}`;contextSelect.appendChild(option);
-    });
-    contextSelect.value=state.ui.selectedEmployeeId||'';
-  }else if(role==='leader'){
-    contextSwitch.hidden=false;contextLabel.textContent='Leder';
-    availableManagers().forEach(manager=>{
-      const option=document.createElement('option');option.value=manager;option.textContent=manager;contextSelect.appendChild(option);
-    });
-    contextSelect.value=state.ui.selectedManager||'';
-  }else{
-    contextSwitch.hidden=true;
-  }
-}
 
 const HR_SERVICES = [
   {code:'12000',name:'Administrasjon'},
@@ -309,8 +228,8 @@ function defaultPositionCodeById(id){ return DEFAULT_POSITION_CODES.find(p=>p.id
 function defaultState(){
   const period=monthNow();
   return {
-    meta:{version:8, createdAt:new Date().toISOString(), company:'HR- og lønnssystem Demo', orgNo:'999 999 999', nextEmployeeNo:1001, employerTaxRate:14.1, employerPensionRate:7},
-    ui:{theme:'light', role:'admin', selectedEmployeeId:'', selectedManager:''},
+    meta:{version:7, createdAt:new Date().toISOString(), company:'HR- og lønnssystem Demo', orgNo:'999 999 999', nextEmployeeNo:1001, employerTaxRate:14.1, employerPensionRate:7},
+    ui:{theme:'light', role:'admin', selectedEmployeeId:''},
     positionCodes:defaultPositionCodes(),
     wageTypes:[
       {id:'wt_evening',code:'2100',name:'Kveldstillegg',mode:'hours',rate:62.00,sign:1,taxable:true,pension:true,vacation:true,category:'Tillegg'},
@@ -487,8 +406,6 @@ function migrateState(){
   state.meta.employerTaxRate ??= 14.1;
   state.meta.employerPensionRate ??= 7;
   state.ui ||= defaults.ui;
-  state.ui ||= {theme:'light',role:'admin',selectedEmployeeId:'',selectedManager:''};
-  state.ui.selectedManager ||= '';
   state.positionCodes ||= [];
   defaults.positionCodes.forEach(p=>{
     const existing=state.positionCodes.find(x=>x.id===p.id||x.code===p.code);
@@ -535,16 +452,10 @@ function migrateState(){
       e.annualSalary=employeeEffectiveAnnualSalary(e);
     }
   });
-  state.employees.forEach(e=>{
-    e.resourceNo ||= e.employeeNo;
-    e.fixedItems ||= [];
-    e.deductionPlans ||= [];
-  });
   state.variableEntries ||= [];
   state.runs ||= [];
   state.payslips ||= [];
   state.audit ||= [];
-  ensureRoleContext();
 }
 
 function entryAmount(entry){
@@ -564,7 +475,6 @@ function runById(id){return state.runs.find(r=>r.id===id)}
 function activeRun(){return state.runs.find(r=>r.status!=='closed') || state.runs[0]}
 
 function setView(view){
-  if(!roleCan(view)) view='dashboard';
   currentView=view;
   $$('.nav-item').forEach(b=>b.classList.toggle('active',b.dataset.view===view));
   $('#viewTitle').textContent=titles[view]||'Lønnssystem';
@@ -572,53 +482,13 @@ function setView(view){
   render();
 }
 function render(){
-  applyRoleUi();
-  if(!roleCan(currentView)) currentView='dashboard';
   const root=$('#viewRoot');
-  const renderers={dashboard:renderDashboard,employees:renderEmployees,variable:renderVariable,leader:renderLeader,runs:renderRuns,payslips:renderPayslips,reports:renderReports,economy:renderEconomy,settings:renderSettings};
+  const renderers={dashboard:renderDashboard,employees:renderEmployees,variable:renderVariable,consultant:renderConsultant,runs:renderRuns,payslips:renderPayslips,reports:renderReports,economy:renderEconomy,settings:renderSettings};
   root.innerHTML=(renderers[currentView]||renderDashboard)();
-  $('#viewTitle').textContent=titles[currentView]||'Lønnssystem';
-  $$('.nav-item').forEach(b=>b.classList.toggle('active',b.dataset.view===currentView));
   bindViewEvents();
 }
 
-function renderEmployeeDashboard(){
-  const e=currentRoleEmployee(),run=activeRun();
-  if(!e)return `<div class="card empty"><div class="empty-icon">♙</div>Importer eller opprett en ansatt før ansattrollen kan brukes.</div>`;
-  const slips=state.payslips.filter(p=>p.employeeId===e.id).sort((a,b)=>b.period.localeCompare(a.period));
-  const latest=slips[0],entries=state.variableEntries.filter(v=>v.employeeId===e.id).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
-  return `
-    <div class="page-actions"><div class="notice">Du ser nå ansattportalen for <strong>${esc(e.name)}</strong>. Rollen gir bare tilgang til egne registreringer og lønnsslipper.</div></div>
-    <div class="grid cols-4">
-      ${stat('Ressursnummer',esc(resourceNumber(e)),'Ansattnummer '+esc(e.employeeNo))}
-      ${stat('Stillingsprosent',pct(e.positionPercent),esc(e.positionTitle||''))}
-      ${stat('Siste netto',latest?money(latest.net):money(0),latest?ymText(latest.period):'Ingen lønnsslipp')}
-      ${stat('Registreringer',entries.length,`${entries.filter(v=>v.status==='submitted').length} sendt til leder`)}
-    </div>
-    <div class="grid cols-2" style="margin-top:18px">
-      <div class="card"><div class="section-title"><div><h2>Mine registreringer</h2><small>Siste aktivitet</small></div><button class="btn small primary" data-nav="variable">Ny registrering</button></div><div class="list">${entries.length?entries.slice(0,6).map(v=>entryListItem(v,true)).join(''):'<div class="empty">Ingen registreringer.</div>'}</div></div>
-      <div class="card"><div class="section-title"><div><h2>Siste lønnsslipp</h2><small>${latest?ymText(latest.period):'Ikke tilgjengelig'}</small></div><button class="btn small ghost" data-nav="payslips">Åpne lønnsslipp</button></div>${latest?`<div class="kpi-row"><div class="mini-kpi"><small>Brutto</small><strong>${money(latest.gross)}</strong></div><div class="mini-kpi"><small>Skatt</small><strong>${money(latest.tax)}</strong></div><div class="mini-kpi"><small>Netto</small><strong>${money(latest.net)}</strong></div></div>`:'<div class="empty">Ingen beregnet lønnsslipp.</div>'}</div>
-    </div>`;
-}
-function renderLeaderDashboard(){
-  const employees=scopedEmployees(),ids=scopedEmployeeIds(),entries=scopedVariableEntries(),submitted=entries.filter(v=>v.status==='submitted'),returned=entries.filter(v=>['returned','rejected'].includes(v.status));
-  return `
-    <div class="page-actions"><div class="notice">Lederområdet er avgrenset til <strong>${esc(state.ui.selectedManager||'ingen valgt leder')}</strong>.</div><button class="btn primary" data-nav="leader">Åpne godkjenningskø</button></div>
-    <div class="grid cols-4">
-      ${stat('Ansatte',employees.length,'I valgt lederområde')}
-      ${stat('Til godkjenning',submitted.length,'Sendt inn av ansatte')}
-      ${stat('Returnert / avvist',returned.length,'Kan redigeres og sendes inn igjen')}
-      ${stat('Godkjent',entries.filter(v=>['approved','included'].includes(v.status)).length,'Klar for lønn')}
-    </div>
-    <div class="grid cols-2" style="margin-top:18px">
-      <div class="card"><div class="section-title"><div><h2>Til behandling</h2><small>${submitted.length} poster</small></div></div><div class="list">${submitted.length?submitted.slice(0,8).map(v=>leaderItem(v)).join(''):'<div class="empty">Ingen poster venter.</div>'}</div></div>
-      <div class="card"><div class="section-title"><div><h2>Ressurser</h2><small>Valgt lederområde</small></div><button class="btn small ghost" data-nav="reports">Ressursrapport</button></div><div class="list">${employees.slice(0,8).map(e=>`<div class="list-item"><div><strong>${esc(resourceNumber(e))} · ${esc(e.name)}</strong><small>${esc(e.positionTitle||'')} · ${esc(e.serviceLocation||'')}</small></div><span class="badge">${pct(e.positionPercent)}</span></div>`).join('')||'<div class="empty">Ingen ansatte er knyttet til valgt leder.</div>'}</div></div>
-    </div>`;
-}
-
 function renderDashboard(){
-  if(state.ui.role==='employee') return renderEmployeeDashboard();
-  if(state.ui.role==='leader') return renderLeaderDashboard();
   const active=state.employees.filter(e=>e.status==='active').length;
   const run=activeRun();
   const pending=state.variableEntries.filter(v=>['submitted','returned'].includes(v.status)).length;
@@ -653,29 +523,26 @@ function renderDashboard(){
           </div>`:`<div class="empty">Opprett en lønnskjøring for å starte.</div>`}
       </div>
       <div class="card">
-        <div class="section-title"><div><h2>Arbeidsflyt</h2><small>Siste aktivitet</small></div><button class="btn small ghost" data-nav="leader">Åpne kø</button></div>
+        <div class="section-title"><div><h2>Arbeidsflyt</h2><small>Siste aktivitet</small></div><button class="btn small ghost" data-nav="consultant">Åpne kø</button></div>
         <div class="timeline">
           ${state.audit.slice(0,5).map(a=>`<div class="timeline-item"><span class="timeline-dot"></span><div><strong>${esc(a.text)}</strong><small>${esc(a.actor)} · ${new Date(a.at).toLocaleString('nb-NO')}</small></div></div>`).join('')}
         </div>
       </div>
     </div>
     <div class="grid cols-3" style="margin-top:18px">
-      <div class="card"><div class="section-title"><h3>Registrering</h3></div><p class="muted">Ansatt eller leder registrerer timer, tillegg, refusjoner og trekk.</p><button class="btn primary" data-nav="variable">Registrer variabel lønn</button></div>
-      <div class="card"><div class="section-title"><h3>Ledergodkjenning</h3></div><p class="muted">Leder godkjenner, returnerer eller avviser registreringer.</p><button class="btn primary" data-nav="leader">Åpne lederkø</button></div>
+      <div class="card"><div class="section-title"><h3>Registrering</h3></div><p class="muted">Leder registrerer timer, tillegg, refusjoner og trekk.</p><button class="btn primary" data-nav="variable">Registrer variabel lønn</button></div>
+      <div class="card"><div class="section-title"><h3>Kontroll</h3></div><p class="muted">Lønnskonsulent godkjenner, returnerer eller avviser poster.</p><button class="btn primary" data-nav="consultant">Åpne kontrollkø</button></div>
       <div class="card"><div class="section-title"><h3>Rapportering</h3></div><p class="muted">Se lønnsjournal, trekk, avdelinger og eksportfiler.</p><button class="btn primary" data-nav="reports">Åpne rapporter</button></div>
     </div>`;
 }
 function stat(label,value,note){return `<div class="card stat-card"><div class="stat-label">${esc(label)}</div><div class="stat-value">${value}</div><div class="stat-note">${esc(note)}</div></div>`}
 
 function renderEmployees(){
-  const employees=scopedEmployees();
-  const canEdit=['admin','payroll'].includes(state.ui.role);
-  const searchText=e=>{const p=employeePositionCode(e);return (e.name+' '+e.employeeNo+' '+resourceNumber(e)+' '+e.department+' '+(e.serviceCode||'')+' '+(e.serviceName||'')+' '+(e.serviceLocation||'')+' '+(e.discipline||'')+' '+(p?.code||'')+' '+(p?.name||'')).toLowerCase();};
-  const actionButtons=e=>`<div class="actions">${canEdit?`<button class="btn small primary" data-edit-employee="${e.id}">Rediger</button><button class="btn small ghost" data-deduction-plans="${e.id}">Lån og trekk${(e.deductionPlans||[]).length?` (${(e.deductionPlans||[]).length})`:''}</button>`:''}<button class="btn small ghost" data-employee-payslip="${e.id}">Lønnsslipp</button></div>`;
-  const cards=employees.map(e=>{const p=employeePositionCode(e);return `
+  const searchText=e=>{const p=employeePositionCode(e);return (e.name+' '+e.employeeNo+' '+e.department+' '+(e.serviceCode||'')+' '+(e.serviceName||'')+' '+(e.serviceLocation||'')+' '+(e.discipline||'')+' '+(p?.code||'')+' '+(p?.name||'')).toLowerCase();};
+  const cards=state.employees.map(e=>{const p=employeePositionCode(e);return `
     <div class="card employee-card employee-row" data-search="${esc(searchText(e))}">
       <div class="employee-head">
-        <div class="employee-main"><div class="avatar">${initials(e.name)}</div><div><strong>${esc(e.name)}</strong><small class="muted">Ressurs ${esc(resourceNumber(e))} · Ansatt #${esc(e.employeeNo)} · ${esc(e.positionTitle)}</small></div></div>
+        <div class="employee-main"><div class="avatar">${initials(e.name)}</div><div><strong>${esc(e.name)}</strong><small class="muted">#${esc(e.employeeNo)} · ${esc(e.positionTitle)}</small></div></div>
         ${statusBadge(e.status)}
       </div>
       <div class="employee-meta"><span class="badge primary"><span class="service-code">${esc(e.serviceCode||'–')}</span> ${esc(e.serviceName||'')}</span>${p?`<span class="badge">Stillingskode ${esc(p.code)}</span>`:''}<span class="badge">${esc(e.serviceLocation||'Ikke angitt')}</span>${e.discipline?`<span class="badge">${esc(e.discipline)}</span>`:''}</div>
@@ -684,25 +551,24 @@ function renderEmployees(){
         <div class="mini-kpi"><small>Lønnskilde</small><strong>${e.useStandardSalary&&p?'Standard':'Manuell'}</strong></div>
         <div class="mini-kpi"><small>Timesats</small><strong>${money(employeeHourly(e))}</strong></div>
       </div>
-      ${actionButtons(e)}
+      <div class="actions"><button class="btn small primary" data-edit-employee="${e.id}">Rediger</button><button class="btn small ghost" data-deduction-plans="${e.id}">Lån og trekk${(e.deductionPlans||[]).length?` (${(e.deductionPlans||[]).length})`:''}</button><button class="btn small ghost" data-employee-payslip="${e.id}">Lønnsslipp</button></div>
     </div>`}).join('');
   return `
     <div class="page-actions">
-      <div class="filters"><input id="employeeSearch" class="search" placeholder="Søk etter navn, ressursnummer, stillingskode, tjeneste eller tjenestested"></div>
-      ${canEdit?`<div class="actions"><button class="btn ghost" data-action="import-employees-excel">Importer Excel</button><button class="btn primary" data-action="new-employee">＋ Ny ansatt</button></div>`:`<div class="badge primary">${employees.length} ansatte i lederområdet</div>`}
+      <div class="filters"><input id="employeeSearch" class="search" placeholder="Søk etter navn, stillingskode, tjeneste, fag eller tjenestested"></div>
+      <div class="actions"><button class="btn ghost" data-action="import-employees-excel">Importer Excel</button><button class="btn primary" data-action="new-employee">＋ Ny ansatt</button></div>
     </div>
     <div class="desktop-table table-wrap">
-      <table><thead><tr><th>Ressurs</th><th>Ansatt</th><th>Tjeneste</th><th>Tjenestested</th><th>Stillingskode</th><th>Stilling</th><th>Årslønn</th><th>Status</th><th></th></tr></thead>
+      <table><thead><tr><th>Ansatt</th><th>Tjeneste</th><th>Tjenestested</th><th>Stillingskode</th><th>Stilling</th><th>Årslønn</th><th>Status</th><th></th></tr></thead>
       <tbody>
-        ${employees.map(e=>{const p=employeePositionCode(e);return `<tr class="employee-row" data-search="${esc(searchText(e))}">
-          <td><strong>${esc(resourceNumber(e))}</strong></td>
+        ${state.employees.map(e=>{const p=employeePositionCode(e);return `<tr class="employee-row" data-search="${esc(searchText(e))}">
           <td><strong>${esc(e.name)}</strong><small class="muted">#${esc(e.employeeNo)}</small></td>
           <td><span class="service-code">${esc(e.serviceCode||'–')}</span><small class="muted">${esc(e.serviceName||'')}</small></td>
           <td>${esc(e.serviceLocation||'Ikke angitt')}<small class="muted">${esc(e.costCenter||'')}</small></td>
           <td>${p?`<strong>${esc(p.code)}</strong><small class="muted">${e.useStandardSalary?'Standardlønn':'Manuell lønn'}</small>`:'<span class="muted">Ikke valgt</span>'}</td>
           <td>${esc(e.positionTitle)}<small class="muted">${esc(e.discipline||e.employmentType)}</small></td>
           <td class="money"><strong>${money(employeeEffectiveAnnualSalary(e))}</strong><small class="muted">${esc(e.salaryPercent??100)} % lønn · ${esc(e.positionPercent)} % stilling</small></td><td>${statusBadge(e.status)}</td>
-          <td>${actionButtons(e)}</td>
+          <td><div class="actions"><button class="btn small primary" data-edit-employee="${e.id}">Rediger</button><button class="btn small ghost" data-deduction-plans="${e.id}">Lån og trekk${(e.deductionPlans||[]).length?` (${(e.deductionPlans||[]).length})`:''}</button><button class="btn small ghost" data-employee-payslip="${e.id}">Lønnsslipp</button></div></td>
         </tr>`}).join('')}
       </tbody></table>
     </div>
@@ -710,13 +576,12 @@ function renderEmployees(){
 }
 
 function employeeModal(emp=null){
-  const e=emp||{id:'',employeeNo:String(state.meta.nextEmployeeNo),resourceNo:String(state.meta.nextEmployeeNo),name:'',birthDate:'',email:'',phone:'',department:'HR-avdelingen',serviceCode:'12000',serviceName:'Administrasjon',serviceLocation:'HR og lønn – Fanatorget',discipline:'',costCenter:'12000-01',manager:'',startDate:today(),endDate:'',positionCodeId:'',useStandardSalary:false,positionTitle:'',employmentType:'Fast',salaryType:'monthly',positionPercent:100,weeklyHours:37.5,annualSalaryBasis:500000,salaryPercent:100,annualSalary:500000,taxRate:28,pensionRate:2,extraTax:0,vacationRate:12,status:'active',fixedItems:[],deductionPlans:[]};
+  const e=emp||{id:'',employeeNo:String(state.meta.nextEmployeeNo),name:'',birthDate:'',email:'',phone:'',department:'HR-avdelingen',serviceCode:'12000',serviceName:'Administrasjon',serviceLocation:'HR og lønn – Fanatorget',discipline:'',costCenter:'12000-01',manager:'',startDate:today(),endDate:'',positionCodeId:'',useStandardSalary:false,positionTitle:'',employmentType:'Fast',salaryType:'monthly',positionPercent:100,weeklyHours:37.5,annualSalaryBasis:500000,salaryPercent:100,annualSalary:500000,taxRate:28,pensionRate:2,extraTax:0,vacationRate:12,status:'active',fixedItems:[],deductionPlans:[]};
   const positionOptions=[['','Ingen stillingskode'],...state.positionCodes.filter(p=>p.active!==false).sort((a,b)=>a.code.localeCompare(b.code)).map(p=>[p.id,`${p.code} – ${p.name} · ${p.salaryPercent??100} % = ${money(positionEffectiveAnnualSalary(p))}`])];
   openModal(emp?'Rediger ansatt':'Ny ansatt',`
     <form id="employeeForm" class="form-grid">
       <input type="hidden" name="id" value="${esc(e.id)}">
       ${field('employeeNo','Ansattnummer',e.employeeNo,'text',true)}
-      ${field('resourceNo','Ressursnummer',e.resourceNo||e.employeeNo,'text',true)}
       ${field('name','Navn',e.name,'text',true)}
       ${field('birthDate','Fødselsdato',e.birthDate,'date')}
       ${field('email','E-post',e.email,'email')}
@@ -904,26 +769,15 @@ function saveDeductionPlan(){
   queueSave();deductionPlansModal(employeeId);toast('Trekkavtale lagret');
 }
 
-function variableEmployeesForRole(){
-  if(state.ui.role==='employee'){
-    const e=currentRoleEmployee(); return e?[e]:[];
-  }
-  if(state.ui.role==='leader') return scopedEmployees().filter(e=>e.status==='active');
-  return state.employees.filter(e=>e.status==='active');
-}
 function renderVariable(){
-  const role=state.ui.role,employees=variableEmployeesForRole();
-  const visible=scopedVariableEntries().slice().sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
-  const ownEmployee=currentRoleEmployee();
-  const employeeField=role==='employee'
-    ? `<div class="field"><label>Ansatt</label><div class="readonly-note"><strong>${esc(ownEmployee?.employeeNo||'')} – ${esc(ownEmployee?.name||'Ingen ansatt valgt')}</strong></div><input type="hidden" name="veEmployee" value="${esc(ownEmployee?.id||'')}"></div>`
-    : selectField('veEmployee','Ansatt','',employees.map(e=>[e.id,`${resourceNumber(e)} · ${e.employeeNo} – ${e.name}`]));
+  const role=state.ui.role;
+  const visible = state.variableEntries.slice().sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
   return `
     <div class="grid cols-2">
       <div class="card">
-        <div class="section-title"><div><h2>${role==='employee'?'Ny registrering':'Registrer variabel lønn'}</h2><small>${role==='employee'?'Ansattportal':'På vegne av ansatte i lederområdet'}</small></div></div>
-        ${employees.length?`<form id="variableForm" class="form-grid">
-          ${employeeField}
+        <div class="section-title"><div><h2>Ny registrering</h2><small>${role==='leader'?'Lederportal':'Demo-registrering'}</small></div></div>
+        <form id="variableForm" class="form-grid">
+          ${selectField('veEmployee','Ansatt','',state.employees.filter(e=>e.status==='active').map(e=>[e.id,`${e.employeeNo} – ${e.name}`]))}
           ${selectField('veWageType','Lønnsart','',state.wageTypes.map(w=>[w.id,`${w.code} – ${w.name}`]))}
           ${field('veDate','Dato',today(),'date',true)}
           ${field('veQuantity','Antall / timer',1,'number',true,'0.25')}
@@ -931,11 +785,11 @@ function renderVariable(){
           ${field('veAmount','Beløp (for beløpsarter)',0,'number',false,'0.01')}
           <div class="field full"><label>Kommentar / dokumentasjon</label><textarea name="veComment" placeholder="Beskriv grunnlaget for registreringen"></textarea></div>
           <div class="field full"><div id="entryPreview" class="notice">Velg lønnsart og opplysninger for å se beregnet beløp.</div></div>
-          <div class="field full"><button class="btn primary" type="submit">Send til leder</button></div>
-        </form>`:`<div class="empty">Ingen ansatte er tilgjengelige for valgt rolle eller leder.</div>`}
+          <div class="field full"><button class="btn primary" type="submit">Send til lønnskonsulent</button></div>
+        </form>
       </div>
       <div class="card">
-        <div class="section-title"><div><h2>${role==='employee'?'Mine registreringer':'Registreringer i lederområdet'}</h2><small>${visible.length} poster</small></div></div>
+        <div class="section-title"><div><h2>Mine registreringer</h2><small>${visible.length} poster</small></div></div>
         <div class="list">
           ${visible.length?visible.map(v=>entryListItem(v,true)).join(''):`<div class="empty"><div class="empty-icon">＋</div>Ingen registreringer.</div>`}
         </div>
@@ -944,70 +798,31 @@ function renderVariable(){
 }
 function entryListItem(v,compact=false){
   const e=employeeById(v.employeeId),w=wageTypeById(v.wageTypeId),amt=entryAmount(v);
-  const editable=compact&&['draft','returned','rejected'].includes(v.status);
   return `<div class="list-item">
-    <div><strong>${esc(e?.name||'Ukjent')} · ${esc(w?.code||'')} ${esc(w?.name||'Ukjent')}</strong><small>${dateText(v.date)} · ${Number(v.quantity||0).toLocaleString('nb-NO')} ${w?.mode==='amount'?'post':'timer'} · ${money(amt)}</small>${v.comment?`<small>${esc(v.comment)}</small>`:''}${v.reviewComment?`<small class="muted">Tilbakemelding fra leder: ${esc(v.reviewComment)}</small>`:''}</div>
-    <div class="right">${statusBadge(v.status)}${editable?`<div style="margin-top:8px"><button class="btn small primary" data-edit-entry="${v.id}">Rediger og send inn</button></div>`:''}</div>
+    <div><strong>${esc(e?.name||'Ukjent')} · ${esc(w?.name||'Ukjent')}</strong><small>${dateText(v.date)} · ${Number(v.quantity||0).toLocaleString('nb-NO')} ${w?.mode==='amount'?'post':'timer'} · ${money(amt)}</small>${v.comment?`<small>${esc(v.comment)}</small>`:''}${v.reviewComment?`<small class="muted">Kommentar: ${esc(v.reviewComment)}</small>`:''}</div>
+    <div class="right">${statusBadge(v.status)}${compact&&['draft','returned'].includes(v.status)?`<div style="margin-top:8px"><button class="btn small ghost" data-resubmit="${v.id}">Send på nytt</button></div>`:''}</div>
   </div>`;
 }
-function variableEntryModal(id){
-  const v=state.variableEntries.find(x=>x.id===id),e=employeeById(v?.employeeId);
-  if(!v||!e)return;
-  if(!['draft','returned','rejected'].includes(v.status))return toast('Denne posten kan ikke redigeres');
-  const employees=variableEmployeesForRole();
-  if(!employees.some(x=>x.id===e.id)&&state.ui.role!=='admin')return toast('Du har ikke tilgang til denne posten');
-  openModal('Rediger variabel lønn',`
-    <form id="variableEditForm" class="form-grid">
-      <input type="hidden" name="entryId" value="${esc(v.id)}">
-      <div class="field"><label>Ansatt</label><div class="readonly-note"><strong>${esc(resourceNumber(e))} · ${esc(e.employeeNo)} – ${esc(e.name)}</strong></div></div>
-      ${selectField('editWageType','Lønnsart',v.wageTypeId,state.wageTypes.map(w=>[w.id,`${w.code} – ${w.name}`]))}
-      ${field('editDate','Dato',v.date,'date',true)}
-      ${field('editQuantity','Antall / timer',v.quantity,'number',true,'0.25')}
-      ${field('editRate','Sats (valgfri)',v.rate||0,'number',false,'0.01')}
-      ${field('editAmount','Beløp (for beløpsarter)',v.amount||0,'number',false,'0.01')}
-      <div class="field full"><label>Kommentar / dokumentasjon</label><textarea name="editComment">${esc(v.comment||'')}</textarea></div>
-      <div class="field full"><div id="editEntryPreview" class="notice"></div></div>
-      ${v.reviewComment?`<div class="field full"><div class="notice warning"><strong>Tilbakemelding fra leder:</strong> ${esc(v.reviewComment)}</div></div>`:''}
-    </form>`,
-    `<button class="btn ghost" data-close-modal>Avbryt</button><button class="btn primary" id="saveVariableEditBtn">Lagre og send til leder</button>`
-  );
-  ['editWageType','editQuantity','editRate','editAmount'].forEach(fieldId=>$(`#${fieldId}`)?.addEventListener('input',updateEditEntryPreview));
-  $('#saveVariableEditBtn')?.addEventListener('click',saveVariableEntryEdit);
-  updateEditEntryPreview();
-}
-function updateEditEntryPreview(){
-  const v=state.variableEntries.find(x=>x.id===$('#variableEditForm input[name="entryId"]')?.value);
-  const fake={employeeId:v?.employeeId,wageTypeId:$('#editWageType')?.value,quantity:Number($('#editQuantity')?.value),rate:Number($('#editRate')?.value),amount:Number($('#editAmount')?.value)};
-  const wt=wageTypeById(fake.wageTypeId),el=$('#editEntryPreview');
-  if(el&&wt)el.innerHTML=`Beregnet beløp: <strong>${money(entryAmount(fake))}</strong> · ${esc(wt.name)}`;
-}
-function saveVariableEntryEdit(){
-  const form=$('#variableEditForm');if(!form?.reportValidity())return;
-  const f=new FormData(form),v=state.variableEntries.find(x=>x.id===f.get('entryId'));if(!v)return;
-  v.wageTypeId=f.get('editWageType');v.date=f.get('editDate');v.quantity=Number(f.get('editQuantity'));v.rate=Number(f.get('editRate'));v.amount=Number(f.get('editAmount'));v.comment=String(f.get('editComment')||'').trim();
-  v.status='submitted';v.reviewComment='';v.resubmittedAt=new Date().toISOString();v.editedAt=new Date().toISOString();
-  audit(`Registreringen for ${employeeById(v.employeeId)?.name} ble korrigert og sendt til leder på nytt.`,state.ui.role==='employee'?'Ansatt':'Leder');
-  queueSave();closeModal();render();toast('Endringene er sendt til leder');
-}
 
-function renderLeader(){
-  const entries=scopedVariableEntries().slice().sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
-  const issues=validateEntries().filter(issue=>!issue.employeeId||scopedEmployeeIds().has(issue.employeeId));
+function renderConsultant(){
+  const filterOrder=['submitted','returned','approved','rejected','included'];
+  const grouped=filterOrder.map(status=>[status,state.variableEntries.filter(v=>v.status===status)]).filter(([,arr])=>arr.length);
+  const issues=validateEntries();
   return `
     <div class="page-actions">
-      <div class="notice ${issues.length?'warning':''}">${issues.length?`${issues.length} kontrollpunkt må vurderes.`:'Ingen kritiske kontrollpunkter funnet i lederområdet.'}</div>
+      <div class="notice ${issues.length?'warning':''}">${issues.length?`${issues.length} kontrollpunkt må vurderes før lønnskjøring.`:'Ingen kritiske kontrollpunkter funnet.'}</div>
       <button class="btn ghost" data-action="approve-all">Godkjenn alle komplette</button>
     </div>
     <div class="grid cols-3">
-      ${stat('Sendt inn',entries.filter(v=>v.status==='submitted').length,'Klar til ledergodkjenning')}
-      ${stat('Godkjent',entries.filter(v=>v.status==='approved').length,'Klar til lønnskjøring')}
-      ${stat('Returnert / avvist',entries.filter(v=>['returned','rejected'].includes(v.status)).length,'Ansatt kan redigere og sende på nytt')}
+      ${stat('Sendt inn',state.variableEntries.filter(v=>v.status==='submitted').length,'Klar til kontroll')}
+      ${stat('Godkjent',state.variableEntries.filter(v=>v.status==='approved').length,'Klar til kjøring')}
+      ${stat('Returnert / avvist',state.variableEntries.filter(v=>['returned','rejected'].includes(v.status)).length,'Trenger oppfølging')}
     </div>
     <div class="grid cols-2" style="margin-top:18px">
       <div class="card">
-        <div class="section-title"><div><h2>Lederkø</h2><small>Variable lønnsposter</small></div></div>
+        <div class="section-title"><div><h2>Kontrollkø</h2><small>Variable lønnsposter</small></div></div>
         <div class="list">
-          ${entries.length?entries.map(v=>leaderItem(v)).join(''):`<div class="empty">Køen er tom.</div>`}
+          ${state.variableEntries.length?state.variableEntries.slice().sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).map(v=>consultantItem(v)).join(''):`<div class="empty">Køen er tom.</div>`}
         </div>
       </div>
       <div class="card">
@@ -1016,25 +831,24 @@ function renderLeader(){
       </div>
     </div>`;
 }
-function leaderItem(v){
+function consultantItem(v){
   const e=employeeById(v.employeeId),w=wageTypeById(v.wageTypeId);
   return `<div class="list-item" style="align-items:flex-start">
-    <div><strong>${esc(resourceNumber(e))} · ${esc(e?.name||'Ukjent')} · ${esc(w?.code||'')} ${esc(w?.name||'')}</strong><small>${dateText(v.date)} · ${money(entryAmount(v))}</small><small>${esc(v.comment||'Ingen kommentar')}</small>${v.reviewComment?`<small>Tilbakemelding: ${esc(v.reviewComment)}</small>`:''}</div>
+    <div><strong>${esc(e?.name||'Ukjent')} · ${esc(w?.code||'')} ${esc(w?.name||'')}</strong><small>${dateText(v.date)} · ${money(entryAmount(v))}</small><small>${esc(v.comment||'Ingen kommentar')}</small>${v.reviewComment?`<small>Tilbakemelding: ${esc(v.reviewComment)}</small>`:''}</div>
     <div class="right">${statusBadge(v.status)}
       ${v.status==='submitted'?`<div class="actions" style="margin-top:8px"><button class="btn small success" data-entry-action="approved" data-id="${v.id}">Godkjenn</button><button class="btn small ghost" data-entry-action="returned" data-id="${v.id}">Returner</button><button class="btn small danger" data-entry-action="rejected" data-id="${v.id}">Avvis</button></div>`:''}
     </div>
   </div>`;
 }
-
 function validateEntries(){
   const issues=[];
   state.variableEntries.forEach(v=>{
     const e=employeeById(v.employeeId),w=wageTypeById(v.wageTypeId),amt=entryAmount(v);
-    if(!e||!w) issues.push({employeeId:v.employeeId,title:'Manglende grunndata',text:`Post ${v.id} mangler ansatt eller lønnsart.`,level:'danger'});
-    if(Number(v.quantity)<0) issues.push({employeeId:v.employeeId,title:'Negativt antall',text:`${e?.name||'Ukjent'} har negativ mengde.`,level:'danger'});
-    if(Math.abs(amt)>50000) issues.push({employeeId:v.employeeId,title:'Høyt beløp',text:`${e?.name||'Ukjent'}: ${money(amt)} bør kontrolleres.`,level:'warning'});
-    if(w?.mode!=='amount' && Number(v.quantity)>80) issues.push({employeeId:v.employeeId,title:'Mange timer',text:`${e?.name||'Ukjent'} har ${v.quantity} timer på én post.`,level:'warning'});
-    if(e?.endDate && v.date>e.endDate) issues.push({employeeId:v.employeeId,title:'Etter sluttdato',text:`Registrering for ${e.name} er etter sluttdato.`,level:'danger'});
+    if(!e||!w) issues.push({title:'Manglende grunndata',text:`Post ${v.id} mangler ansatt eller lønnsart.`,level:'danger'});
+    if(Number(v.quantity)<0) issues.push({title:'Negativt antall',text:`${e?.name||'Ukjent'} har negativ mengde.`,level:'danger'});
+    if(Math.abs(amt)>50000) issues.push({title:'Høyt beløp',text:`${e?.name||'Ukjent'}: ${money(amt)} bør kontrolleres.`,level:'warning'});
+    if(w?.mode!=='amount' && Number(v.quantity)>80) issues.push({title:'Mange timer',text:`${e?.name||'Ukjent'} har ${v.quantity} timer på én post.`,level:'warning'});
+    if(e?.endDate && v.date>e.endDate) issues.push({title:'Etter sluttdato',text:`Registrering for ${e.name} er etter sluttdato.`,level:'danger'});
   });
   return issues;
 }
@@ -1135,21 +949,18 @@ function calculatePayroll(run){
 
 function renderPayslips(){
   const selectedRun=activeRun();
-  const allSlips=selectedRun?state.payslips.filter(p=>p.runId===selectedRun.id):[];
-  const slips=scopedPayslips(allSlips);
-  const selectedId=state.ui.role==='employee'?currentRoleEmployee()?.id:state.ui.selectedEmployeeId;
+  const slips=selectedRun?state.payslips.filter(p=>p.runId===selectedRun.id):[];
+  const selectedId=state.ui.selectedEmployeeId;
   const selected=slips.find(p=>p.employeeId===selectedId)||slips[0];
-  if(selected&&state.ui.role!=='employee') state.ui.selectedEmployeeId=selected.employeeId;
+  if(selected) state.ui.selectedEmployeeId=selected.employeeId;
   return `
     <div class="page-actions no-print">
       <div class="filters">
-        ${state.ui.role==='employee'
-          ? `<div class="badge primary">${esc(currentRoleEmployee()?.name||'Ansatt')}</div>`
-          : `<select id="payslipEmployeeSelect">${slips.map(p=>{const e=employeeById(p.employeeId);return `<option value="${p.employeeId}" ${selected?.employeeId===p.employeeId?'selected':''}>${esc(resourceNumber(e))} · ${esc(e?.employeeNo||'')} – ${esc(e?.name||'Ukjent')}</option>`}).join('')}</select>`}
+        <select id="payslipEmployeeSelect">${slips.map(p=>{const e=employeeById(p.employeeId);return `<option value="${p.employeeId}" ${selected?.employeeId===p.employeeId?'selected':''}>${esc(e?.employeeNo||'')} – ${esc(e?.name||'Ukjent')}</option>`}).join('')}</select>
       </div>
       <button class="btn primary" data-action="print">Skriv ut / lagre PDF</button>
     </div>
-    ${selected?payslipHtml(selected):`<div class="card empty"><div class="empty-icon">▤</div>Ingen lønnsslipp er tilgjengelig for valgt rolle og periode.</div>`}`;
+    ${selected?payslipHtml(selected):`<div class="card empty"><div class="empty-icon">▤</div>Beregn en lønnskjøring først.</div>`}`;
 }
 function payslipHtml(p){
   const e=employeeById(p.employeeId),r=runById(p.runId);
@@ -1174,38 +985,14 @@ function payslipHtml(p){
   </div>`;
 }
 
-function reportResourceGroups(slips){
-  const groups={};
-  slips.forEach(p=>{
-    const e=employeeById(p.employeeId),resource=resourceNumber(e);
-    groups[resource] ||= {resource,employee:e,lineCount:0,earnings:0,deductions:0,amount:0,lines:[]};
-    (p.lines||[]).forEach(line=>{
-      const amount=Number(line.amount||0),group=groups[resource];
-      group.lineCount++;group.amount+=amount;group.lines.push({line,p});
-      if(amount>=0)group.earnings+=amount;else group.deductions+=Math.abs(amount);
-    });
-  });
-  return Object.values(groups).sort((a,b)=>a.resource.localeCompare(b.resource,'nb',{numeric:true}));
-}
-function detailedJournalHtml(slips){
-  const groups=reportResourceGroups(slips);
-  return `<div class="table-wrap"><table><thead><tr><th>Ressursnr.</th><th>Ansatt</th><th>Tjeneste</th><th>Tjenestested</th><th>Lønnskode</th><th>Lønnsart</th><th>Referanse</th><th class="money">Antall</th><th class="money">Sats</th><th class="money">Beløp</th></tr></thead><tbody>${groups.map(group=>{
-    const e=group.employee;
-    const lines=group.lines.map(({line:l},index)=>`<tr class="${index===0?'report-group-start':''}"><td><strong>${esc(group.resource)}</strong></td><td>${esc(e?.employeeNo||'')} – ${esc(e?.name||'')}</td><td><span class="service-code">${esc(e?.serviceCode||'')}</span><small class="muted">${esc(e?.serviceName||'')}</small></td><td>${esc(e?.serviceLocation||'')}</td><td><strong>${esc(l.code||'–')}</strong></td><td>${esc(l.name||'')}</td><td>${esc(l.planReference||'–')}</td><td class="money">${Number(l.quantity||0).toLocaleString('nb-NO')}</td><td class="money">${money(l.rate)}</td><td class="money">${money(l.amount)}</td></tr>`).join('');
-    return `${lines}<tr class="subtotal-row"><td colspan="9">Delsammendrag ressurs ${esc(group.resource)} · ${esc(e?.name||'')}</td><td class="money">${money(group.amount)}</td></tr>`;
-  }).join('')}</tbody></table></div>`;
-}
 function renderReports(){
-  const run=activeRun(),allSlips=run?state.payslips.filter(p=>p.runId===run.id):[],slips=scopedPayslips(allSlips);
-  const allTabs=[['resource','Ressurssammendrag'],['journal','Detaljert lønnsjournal'],['department','Tjeneste'],['deductions','Trekk'],['agreements','Trekkavtaler'],['wagetypes','Lønnsarter']];
-  const tabs=state.ui.role==='leader'?allTabs.filter(t=>['resource','journal','department'].includes(t[0])):allTabs;
-  if(!tabs.some(t=>t[0]===reportType))reportType=tabs[0][0];
+  const run=activeRun(),slips=run?state.payslips.filter(p=>p.runId===run.id):[];
+  const tabs=[['journal','Detaljert lønnsjournal'],['department','Tjeneste'],['deductions','Trekk'],['agreements','Trekkavtaler'],['wagetypes','Lønnsarter']];
   return `
     <div class="toolbar">
       <div class="segmented">${tabs.map(t=>`<button data-report="${t[0]}" class="${reportType===t[0]?'active':''}">${t[1]}</button>`).join('')}</div>
       <div class="actions"><button class="btn ghost" data-action="export-report">Eksporter CSV</button><button class="btn primary" data-action="print">Skriv ut / PDF</button></div>
     </div>
-    ${state.ui.role==='leader'?`<div class="notice" style="margin-bottom:18px">Rapportene er avgrenset til ansatte under ${esc(state.ui.selectedManager||'valgt leder')}.</div>`:''}
     <div class="card">
       <div class="section-title"><div><h2>${tabs.find(t=>t[0]===reportType)?.[1]}</h2><small>${run?esc(run.name):'Ingen aktiv kjøring'}</small></div></div>
       ${reportTable(reportType,slips)}
@@ -1213,21 +1000,16 @@ function renderReports(){
 }
 function reportTable(type,slips){
   if(type==='agreements'){
-    const ids=scopedEmployeeIds();
-    const rows=state.employees.filter(e=>state.ui.role==='admin'||state.ui.role==='payroll'||ids.has(e.id)).flatMap(e=>(e.deductionPlans||[]).map(plan=>({employee:e,plan,wt:wageTypeById(plan.wageTypeId)})));
-    return rows.length?`<div class="table-wrap"><table><thead><tr><th>Ressursnr.</th><th>Ansatt</th><th>Lønnskode</th><th>Trekkart</th><th>Referanse</th><th>Trekkmåte</th><th>Periode</th><th class="money">Totalt krav</th><th class="money">Trukket</th><th class="money">Restsaldo</th><th>Status</th></tr></thead><tbody>${rows.map(({employee:e,plan,wt})=>`<tr><td>${esc(resourceNumber(e))}</td><td>${esc(e.employeeNo)} – ${esc(e.name)}</td><td><span class="service-code">${esc(wt?.code||'')}</span></td><td>${esc(wt?.name||'')}</td><td>${esc(plan.reference||'–')}</td><td>${plan.frequency==='once'?'Engang':`${money(plan.installmentAmount)} per måned`}</td><td>${dateText(plan.startDate)} – ${dateText(plan.endDate)}</td><td class="money">${money(plan.totalAmount)}</td><td class="money">${money(planDeducted(plan.id))}</td><td class="money"><strong>${money(planRemaining(plan))}</strong></td><td>${deductionPlanBadge(plan)}</td></tr>`).join('')}</tbody></table></div>`:`<div class="empty">Ingen trekkavtaler er registrert.</div>`;
+    const rows=state.employees.flatMap(e=>(e.deductionPlans||[]).map(plan=>({employee:e,plan,wt:wageTypeById(plan.wageTypeId)})));
+    return rows.length?`<div class="table-wrap"><table><thead><tr><th>Ansatt</th><th>Lønnskode</th><th>Trekkart</th><th>Referanse</th><th>Trekkmåte</th><th>Periode</th><th class="money">Totalt krav</th><th class="money">Trukket</th><th class="money">Restsaldo</th><th>Status</th></tr></thead><tbody>${rows.map(({employee:e,plan,wt})=>`<tr><td>${esc(e.employeeNo)} – ${esc(e.name)}</td><td><span class="service-code">${esc(wt?.code||'')}</span></td><td>${esc(wt?.name||'')}</td><td>${esc(plan.reference||'–')}</td><td>${plan.frequency==='once'?'Engang':`${money(plan.installmentAmount)} per måned`}</td><td>${dateText(plan.startDate)} – ${dateText(plan.endDate)}</td><td class="money">${money(plan.totalAmount)}</td><td class="money">${money(planDeducted(plan.id))}</td><td class="money"><strong>${money(planRemaining(plan))}</strong></td><td>${deductionPlanBadge(plan)}</td></tr>`).join('')}</tbody></table></div>`:`<div class="empty">Ingen trekkavtaler er registrert.</div>`;
   }
   if(!slips.length) return `<div class="empty">Ingen beregnede data i valgt kjøring.</div>`;
-  if(type==='resource'){
-    const groups=reportResourceGroups(slips);
-    return `<div class="table-wrap"><table><thead><tr><th>Ressursnr.</th><th>Ansatt</th><th>Tjeneste</th><th>Tjenestested</th><th>Linjer</th><th class="money">Tillegg / lønn</th><th class="money">Trekk</th><th class="money">Sum beløp</th></tr></thead><tbody>${groups.map(g=>{const e=g.employee;return `<tr><td><strong>${esc(g.resource)}</strong></td><td>${esc(e?.employeeNo||'')} – ${esc(e?.name||'')}</td><td><span class="service-code">${esc(e?.serviceCode||'')}</span> ${esc(e?.serviceName||'')}</td><td>${esc(e?.serviceLocation||'')}</td><td>${g.lineCount}</td><td class="money">${money(g.earnings)}</td><td class="money">${money(g.deductions)}</td><td class="money"><strong>${money(g.amount)}</strong></td></tr>`}).join('')}</tbody></table></div>`;
-  }
-  if(type==='journal') return detailedJournalHtml(slips);
+  if(type==='journal') return `<div class="table-wrap"><table><thead><tr><th>Ansatt</th><th>Tjeneste</th><th>Tjenestested</th><th>Lønnskode</th><th>Lønnsart</th><th>Referanse</th><th class="money">Antall</th><th class="money">Sats</th><th class="money">Beløp</th></tr></thead><tbody>${slips.flatMap(p=>{const e=employeeById(p.employeeId);return (p.lines||[]).map(l=>`<tr><td>${esc(e?.employeeNo||'')} – ${esc(e?.name||'')}</td><td><span class="service-code">${esc(e?.serviceCode||'')}</span><small class="muted">${esc(e?.serviceName||'')}</small></td><td>${esc(e?.serviceLocation||'')}</td><td><strong>${esc(l.code||'–')}</strong></td><td>${esc(l.name||'')}</td><td>${esc(l.planReference||'–')}</td><td class="money">${Number(l.quantity||0).toLocaleString('nb-NO')}</td><td class="money">${money(l.rate)}</td><td class="money">${money(l.amount)}</td></tr>`)}).join('')}</tbody></table></div>`;
   if(type==='department'){
-    const groups={};slips.forEach(p=>{const e=employeeById(p.employeeId),k=`${e?.serviceCode||'–'}|${e?.serviceName||'Ukjent'}`;groups[k]??={resources:new Set(),amount:0};groups[k].resources.add(resourceNumber(e));(p.lines||[]).forEach(l=>groups[k].amount+=Number(l.amount||0))});
-    return `<div class="table-wrap"><table><thead><tr><th>Tjenestekode</th><th>Tjeneste</th><th>Ressurser</th><th class="money">Sum beløp</th></tr></thead><tbody>${Object.entries(groups).sort().map(([k,g])=>{const [code,name]=k.split('|');return `<tr><td><span class="service-code">${esc(code)}</span></td><td>${esc(name)}</td><td>${g.resources.size}</td><td class="money"><strong>${money(g.amount)}</strong></td></tr>`}).join('')}</tbody></table></div>`;
+    const groups={};slips.forEach(p=>{const e=employeeById(p.employeeId),k=`${e?.serviceCode||'–'}|${e?.serviceName||'Ukjent'}`;groups[k]??={count:0,gross:0,tax:0,net:0};groups[k].count++;groups[k].gross+=p.gross;groups[k].tax+=p.tax;groups[k].net+=p.net});
+    return `<div class="table-wrap"><table><thead><tr><th>Tjenestekode</th><th>Tjeneste</th><th>Ansatte</th><th class="money">Brutto</th><th class="money">Skatt</th><th class="money">Netto</th></tr></thead><tbody>${Object.entries(groups).sort().map(([k,g])=>{const [code,name]=k.split('|');return `<tr><td><span class="service-code">${esc(code)}</span></td><td>${esc(name)}</td><td>${g.count}</td><td class="money">${money(g.gross)}</td><td class="money">${money(g.tax)}</td><td class="money">${money(g.net)}</td></tr>`}).join('')}</tbody></table></div>`;
   }
-  if(type==='deductions') return `<div class="table-wrap"><table><thead><tr><th>Ressursnr.</th><th>Ansatt</th><th>Lønnskode</th><th>Trekkart</th><th>Referanse</th><th class="money">Beløp</th></tr></thead><tbody>${slips.flatMap(p=>{const e=employeeById(p.employeeId);return (p.lines||[]).filter(l=>Number(l.amount)<0).map(l=>`<tr><td>${esc(resourceNumber(e))}</td><td>${esc(e?.employeeNo||'')} – ${esc(e?.name||'')}</td><td><strong>${esc(l.code||'')}</strong></td><td>${esc(l.name||'')}</td><td>${esc(l.planReference||'–')}</td><td class="money">${money(Math.abs(l.amount))}</td></tr>`)}).join('')}</tbody></table></div>`;
+  if(type==='deductions') return `<div class="table-wrap"><table><thead><tr><th>Ansatt</th><th>Lønnskode</th><th>Trekkart</th><th>Referanse</th><th class="money">Beløp</th></tr></thead><tbody>${slips.flatMap(p=>{const e=employeeById(p.employeeId);return (p.lines||[]).filter(l=>Number(l.amount)<0).map(l=>`<tr><td>${esc(e?.employeeNo||'')} – ${esc(e?.name||'')}</td><td><strong>${esc(l.code||'')}</strong></td><td>${esc(l.name||'')}</td><td>${esc(l.planReference||'–')}</td><td class="money">${money(Math.abs(l.amount))}</td></tr>`)}).join('')}</tbody></table></div>`;
   const groups={};slips.forEach(p=>p.lines.forEach(l=>{groups[l.code]??={name:l.name,amount:0,count:0};groups[l.code].amount+=l.amount;groups[l.code].count++}));
   return `<div class="table-wrap"><table><thead><tr><th>Lønnskode</th><th>Lønnsart</th><th>Linjer</th><th class="money">Beløp</th></tr></thead><tbody>${Object.entries(groups).sort().map(([code,g])=>`<tr><td><strong>${esc(code)}</strong></td><td>${esc(g.name)}</td><td>${g.count}</td><td class="money">${money(g.amount)}</td></tr>`).join('')}</tbody></table></div>`;
 }
@@ -1398,9 +1180,9 @@ function bindViewEvents(){
   $('[data-action="new-employee"]')?.addEventListener('click',()=>employeeModal());
   $('#variableForm')?.addEventListener('submit',submitVariable);
   ['veEmployee','veWageType','veQuantity','veRate','veAmount'].forEach(id=>$(`#${id}`)?.addEventListener('input',updateEntryPreview));
-  $$('[data-edit-entry]').forEach(b=>b.onclick=()=>variableEntryModal(b.dataset.editEntry));
+  $$('[data-resubmit]').forEach(b=>b.onclick=()=>{const v=state.variableEntries.find(x=>x.id===b.dataset.resubmit);if(v){v.status='submitted';v.reviewComment='';audit(`Post for ${employeeById(v.employeeId)?.name} ble sendt inn på nytt.`,'Leder');queueSave();render();}});
   $$('[data-entry-action]').forEach(b=>b.onclick=()=>reviewEntry(b.dataset.id,b.dataset.entryAction));
-  $('[data-action="approve-all"]')?.addEventListener('click',()=>{const ids=scopedEmployeeIds();state.variableEntries.filter(v=>v.status==='submitted'&&(state.ui.role==='admin'||ids.has(v.employeeId))).forEach(v=>v.status='approved');audit('Alle komplette variable poster i lederområdet ble godkjent.','Leder');queueSave();render();toast('Poster godkjent')});
+  $('[data-action="approve-all"]')?.addEventListener('click',()=>{state.variableEntries.filter(v=>v.status==='submitted').forEach(v=>v.status='approved');audit('Alle komplette variable poster ble godkjent.','Lønnskonsulent');queueSave();render();toast('Poster godkjent')});
   $('#activeRunSelect')?.addEventListener('change',e=>{const chosen=runById(e.target.value);state.runs.forEach(r=>r._selected=false);if(chosen)chosen._selected=true;const idx=state.runs.indexOf(chosen);if(idx>0){state.runs.splice(idx,1);state.runs.unshift(chosen)}queueSave();render()});
   $('[data-action="new-run"]')?.addEventListener('click',newRunModal);
   $('[data-action="calculate-run"]')?.addEventListener('click',()=>{const r=activeRun();if(r){calculatePayroll(r);render();toast('Lønn er beregnet')}});
@@ -1426,10 +1208,9 @@ function bindViewEvents(){
   $('#companyForm')?.addEventListener('submit',e=>{e.preventDefault();state.meta.company=e.target.companyName.value.trim();state.meta.orgNo=e.target.companyOrg.value.trim();state.meta.employerTaxRate=Number(e.target.employerTaxRate.value);state.meta.employerPensionRate=Number(e.target.employerPensionRate.value);queueSave();toast('Oppsett lagret')});
 }
 function submitVariable(e){
-  e.preventDefault();const f=new FormData(e.target),employeeId=state.ui.role==='employee'?currentRoleEmployee()?.id:f.get('veEmployee');
-  if(!employeeId)return alert('Velg en ansatt.');
-  const v={id:uid('ve'),employeeId,wageTypeId:f.get('veWageType'),date:f.get('veDate'),quantity:Number(f.get('veQuantity')),rate:Number(f.get('veRate')),amount:Number(f.get('veAmount')),comment:String(f.get('veComment')||'').trim(),status:'submitted',createdBy:state.ui.role==='employee'?employeeById(employeeId)?.name:(state.ui.selectedManager||'Leder'),createdAt:new Date().toISOString()};
-  state.variableEntries.unshift(v);audit(`Variabel lønn for ${employeeById(v.employeeId)?.name} ble sendt til leder.`,state.ui.role==='employee'?'Ansatt':'Leder');queueSave();e.target.reset();render();toast('Registreringen er sendt til leder');
+  e.preventDefault();const f=new FormData(e.target);
+  const v={id:uid('ve'),employeeId:f.get('veEmployee'),wageTypeId:f.get('veWageType'),date:f.get('veDate'),quantity:Number(f.get('veQuantity')),rate:Number(f.get('veRate')),amount:Number(f.get('veAmount')),comment:String(f.get('veComment')||'').trim(),status:'submitted',createdBy:state.ui.role==='leader'?'Demo-leder':'Demo-bruker',createdAt:new Date().toISOString()};
+  state.variableEntries.unshift(v);audit(`Variabel lønn for ${employeeById(v.employeeId)?.name} ble sendt inn.`,'Leder');queueSave();e.target.reset();render();toast('Registreringen er sendt inn');
 }
 function updateEntryPreview(){
   const fake={employeeId:$('#veEmployee')?.value,wageTypeId:$('#veWageType')?.value,quantity:Number($('#veQuantity')?.value),rate:Number($('#veRate')?.value),amount:Number($('#veAmount')?.value)};
@@ -1441,7 +1222,7 @@ function reviewEntry(id,action){
   let comment='';
   if(['returned','rejected'].includes(action)) comment=prompt(action==='returned'?'Hva må korrigeres?':'Begrunn avvisningen:')||'Ingen kommentar.';
   v.status=action;v.reviewComment=comment;v.reviewedAt=new Date().toISOString();
-  audit(`${wageTypeById(v.wageTypeId)?.name} for ${employeeById(v.employeeId)?.name} ble ${action==='approved'?'godkjent':action==='returned'?'returnert':'avvist'}.`,'Leder');
+  audit(`${wageTypeById(v.wageTypeId)?.name} for ${employeeById(v.employeeId)?.name} ble ${action==='approved'?'godkjent':action==='returned'?'returnert':'avvist'}.`,'Lønnskonsulent');
   queueSave();render();toast('Status oppdatert');
 }
 function newRunModal(){
@@ -1466,7 +1247,7 @@ function saveEmployee(){
   const fixedItems=$$('.fixed-item-row').map(r=>({id:r.dataset.id||uid('fi'),name:$('.fi-name',r).value.trim(),kind:$('.fi-kind',r).value,amount:Number($('.fi-amount',r).value)})).filter(i=>i.name);
   const positionCodeId=String(f.get('positionCodeId')||''),position=positionCodeById(positionCodeId),useStandardSalary=Boolean(positionCodeId&&f.has('useStandardSalary'));
   const annualSalaryBasis=useStandardSalary&&position?Number(position.annualSalary||0):Number(f.get('annualSalaryBasis')),salaryPercent=useStandardSalary&&position?Number(position.salaryPercent??100):Number(f.get('salaryPercent')),annualSalary=annualSalaryBasis*salaryPercent/100;
-  const obj={id,employeeNo:String(f.get('employeeNo')).trim(),resourceNo:String(f.get('resourceNo')||f.get('employeeNo')).trim(),name:String(f.get('name')).trim(),birthDate:f.get('birthDate'),email:String(f.get('email')||'').trim(),phone:String(f.get('phone')||'').trim(),department:String(f.get('department')).trim(),serviceCode:String(f.get('serviceCode')||'12000'),serviceName:serviceByCode(f.get('serviceCode'))?.name||'',serviceLocation:String(f.get('serviceLocation')||'').trim(),discipline:String(f.get('discipline')||'').trim(),costCenter:String(f.get('costCenter')).trim(),manager:String(f.get('manager')||'').trim(),startDate:f.get('startDate'),endDate:f.get('endDate'),positionCodeId,useStandardSalary,positionTitle:String(f.get('positionTitle')).trim(),employmentType:f.get('employmentType'),salaryType:f.get('salaryType'),positionPercent:Number(f.get('positionPercent')),weeklyHours:Number(f.get('weeklyHours')),annualSalaryBasis,salaryPercent,annualSalary,taxRate:Number(f.get('taxRate')),pensionRate:Number(f.get('pensionRate')),extraTax:Number(f.get('extraTax')),vacationRate:Number(f.get('vacationRate')),status:f.get('status'),fixedItems,deductionPlans:old?.deductionPlans||[]};
+  const obj={id,employeeNo:String(f.get('employeeNo')).trim(),name:String(f.get('name')).trim(),birthDate:f.get('birthDate'),email:String(f.get('email')||'').trim(),phone:String(f.get('phone')||'').trim(),department:String(f.get('department')).trim(),serviceCode:String(f.get('serviceCode')||'12000'),serviceName:serviceByCode(f.get('serviceCode'))?.name||'',serviceLocation:String(f.get('serviceLocation')||'').trim(),discipline:String(f.get('discipline')||'').trim(),costCenter:String(f.get('costCenter')).trim(),manager:String(f.get('manager')||'').trim(),startDate:f.get('startDate'),endDate:f.get('endDate'),positionCodeId,useStandardSalary,positionTitle:String(f.get('positionTitle')).trim(),employmentType:f.get('employmentType'),salaryType:f.get('salaryType'),positionPercent:Number(f.get('positionPercent')),weeklyHours:Number(f.get('weeklyHours')),annualSalaryBasis,salaryPercent,annualSalary,taxRate:Number(f.get('taxRate')),pensionRate:Number(f.get('pensionRate')),extraTax:Number(f.get('extraTax')),vacationRate:Number(f.get('vacationRate')),status:f.get('status'),fixedItems,deductionPlans:old?.deductionPlans||[]};
   if(old) Object.assign(old,obj); else {state.employees.push(obj);state.meta.nextEmployeeNo=Math.max(state.meta.nextEmployeeNo,Number(obj.employeeNo)+1)}
   audit(`${obj.name} ble ${old?'oppdatert':'opprettet'} i ansattregisteret${useStandardSalary&&position?` med ${salaryPercent} % lønn fra stillingskode ${position.code}`:''}.`,'Systemadministrator');queueSave();closeModal();render();toast('Ansatt lagret');
 }
@@ -1484,44 +1265,45 @@ function saveWageType(){
 }
 function exportBackup(){downloadFile(`lonnsdemo-backup-${today()}.json`,JSON.stringify(state,null,2),'application/json')}
 function exportReport(){
-  const run=activeRun(),allSlips=run?state.payslips.filter(p=>p.runId===run.id):[],slips=scopedPayslips(allSlips);
-  if(!slips.length&&reportType!=='agreements')return toast('Ingen rapportdata');
-  let rows=[],fileName=`${reportType}-${run?.period||today()}.csv`;
-  if(reportType==='resource'){
-    rows=[['Ressursnummer','Ansattnummer','Navn','Tjenestekode','Tjeneste','Tjenestested','Antall linjer','Tillegg / lønn','Trekk','Sum beløp']];
-    reportResourceGroups(slips).forEach(g=>{const e=g.employee;rows.push([g.resource,e?.employeeNo,e?.name,e?.serviceCode,e?.serviceName,e?.serviceLocation,g.lineCount,g.earnings,g.deductions,g.amount])});
-    fileName=`ressurssammendrag-${run.period}.csv`;
-  }else if(reportType==='journal'){
-    rows=[['Ressursnummer','Ansattnummer','Navn','Tjenestekode','Tjeneste','Tjenestested','Lønnskode','Lønnsart','Referanse','Antall','Sats','Beløp']];
-    reportResourceGroups(slips).forEach(group=>{
-      const e=group.employee;
-      group.lines.forEach(({line:l})=>rows.push([group.resource,e?.employeeNo,e?.name,e?.serviceCode,e?.serviceName,e?.serviceLocation,l.code,l.name,l.planReference||'',l.quantity,l.rate,l.amount]));
-      rows.push([group.resource,e?.employeeNo,e?.name,'DELSAMMENDRAG','','','','','','','',group.amount]);
+  const run=activeRun(),slips=run?state.payslips.filter(p=>p.runId===run.id):[];
+  if(reportType!=='agreements'&&!slips.length) return toast('Ingen rapportdata');
+  let rows=[];
+  let fileName=`rapport-${reportType}-${run?.period||today()}.csv`;
+  if(reportType==='journal'){
+    rows=[['Ansattnummer','Navn','Tjenestekode','Tjeneste','Tjenestested','Lønnskode','Lønnsart','Referanse','Antall','Sats','Beløp']];
+    slips.forEach(p=>{
+      const e=employeeById(p.employeeId);
+      p.lines.forEach(l=>rows.push([e?.employeeNo,e?.name,e?.serviceCode,e?.serviceName,e?.serviceLocation,l.code,l.name,l.planReference||'',l.quantity,l.rate,l.amount]));
     });
-    fileName=`detaljert-lonnsjournal-med-delsammendrag-${run.period}.csv`;
+    fileName=`detaljert-lonnsjournal-${run.period}.csv`;
   }else if(reportType==='department'){
-    rows=[['Tjenestekode','Tjeneste','Antall ressurser','Sum beløp']];
-    const groups={};slips.forEach(p=>{const e=employeeById(p.employeeId),key=`${e?.serviceCode||'–'}|${e?.serviceName||'Ukjent'}`;groups[key]??={resources:new Set(),amount:0};groups[key].resources.add(resourceNumber(e));(p.lines||[]).forEach(l=>groups[key].amount+=Number(l.amount||0))});
-    Object.entries(groups).forEach(([key,g])=>{const [code,name]=key.split('|');rows.push([code,name,g.resources.size,g.amount])});
+    rows=[['Tjenestekode','Tjeneste','Antall ansatte','Brutto','Skatt','Netto']];
+    const groups={};
+    slips.forEach(p=>{const e=employeeById(p.employeeId),k=`${e?.serviceCode||'–'}|${e?.serviceName||'Ukjent'}`;groups[k]??={count:0,gross:0,tax:0,net:0};groups[k].count++;groups[k].gross+=p.gross;groups[k].tax+=p.tax;groups[k].net+=p.net});
+    Object.entries(groups).forEach(([key,g])=>{const [code,name]=key.split('|');rows.push([code,name,g.count,g.gross,g.tax,g.net])});
   }else if(reportType==='deductions'){
-    rows=[['Ressursnummer','Ansattnummer','Navn','Lønnskode','Trekkart','Referanse','Beløp']];
-    slips.forEach(p=>{const e=employeeById(p.employeeId);(p.lines||[]).filter(l=>Number(l.amount)<0).forEach(l=>rows.push([resourceNumber(e),e?.employeeNo,e?.name,l.code,l.name,l.planReference||'',Math.abs(l.amount)]))});
+    rows=[['Ansattnummer','Navn','Lønnskode','Trekkart','Referanse','Beløp']];
+    slips.forEach(p=>{
+      const e=employeeById(p.employeeId);
+      (p.lines||[]).filter(l=>Number(l.amount)<0).forEach(l=>rows.push([e?.employeeNo,e?.name,l.code,l.name,l.planReference||'',Math.abs(l.amount)]));
+    });
   }else if(reportType==='agreements'){
-    rows=[['Ressursnummer','Ansattnummer','Navn','Lønnskode','Trekkart','Referanse','Trekkmåte','Beløp per måned','Startdato','Sluttdato','Totalt krav','Trukket','Restsaldo','Status']];
-    const ids=scopedEmployeeIds();
-    state.employees.filter(e=>state.ui.role==='admin'||state.ui.role==='payroll'||ids.has(e.id)).forEach(e=>(e.deductionPlans||[]).forEach(plan=>{
+    rows=[['Ansattnummer','Navn','Lønnskode','Trekkart','Referanse','Trekkmåte','Beløp per måned','Startdato','Sluttdato','Totalt krav','Trukket','Restsaldo','Status']];
+    state.employees.forEach(e=>(e.deductionPlans||[]).forEach(plan=>{
       const wt=wageTypeById(plan.wageTypeId);
-      rows.push([resourceNumber(e),e.employeeNo,e.name,wt?.code||'',wt?.name||'',plan.reference||'',plan.frequency==='once'?'Engang':'Månedlig',plan.frequency==='monthly'?plan.installmentAmount:'',plan.startDate,plan.endDate,plan.totalAmount,planDeducted(plan.id),planRemaining(plan),deductionPlanStatus(plan)[0]]);
+      rows.push([e.employeeNo,e.name,wt?.code||'',wt?.name||'',plan.reference||'',plan.frequency==='once'?'Engang':'Månedlig',plan.frequency==='monthly'?plan.installmentAmount:'',plan.startDate,plan.endDate,plan.totalAmount,planDeducted(plan.id),planRemaining(plan),deductionPlanStatus(plan)[0]]);
     }));
     fileName=`trekkavtaler-${today()}.csv`;
   }else{
     rows=[['Lønnskode','Lønnsart','Antall linjer','Beløp']];
-    const groups={};slips.forEach(p=>p.lines.forEach(l=>{groups[l.code]??={name:l.name,amount:0,count:0};groups[l.code].amount+=l.amount;groups[l.code].count++}));
+    const groups={};
+    slips.forEach(p=>p.lines.forEach(l=>{groups[l.code]??={name:l.name,amount:0,count:0};groups[l.code].amount+=l.amount;groups[l.code].count++}));
     Object.entries(groups).sort().forEach(([code,g])=>rows.push([code,g.name,g.count,g.amount]));
   }
   const csv=rows.map(r=>r.map(v=>`"${String(v??'').replaceAll('"','""')}"`).join(';')).join('\n');
-  downloadFile(fileName,'\ufeff'+csv,'text/csv;charset=utf-8');
+  downloadFile(fileName, '\ufeff'+csv,'text/csv;charset=utf-8');
 }
+
 function exportEconomy(){
   const run=activeRun(),slips=run?state.payslips.filter(p=>p.runId===run.id):[];
   if(!slips.length)return toast('Ingen beregnede kostnader');
@@ -1531,7 +1313,7 @@ function exportEconomy(){
   downloadFile(`lonnskostnader-tjenestested-${run.period}.csv`,'\ufeff'+csv,'text/csv;charset=utf-8');
 }
 const EMPLOYEE_IMPORT_HEADERS = [
-  'Ansattnummer','Ressursnummer','Navn','Fødselsdato','E-post','Telefon','Avdeling','Tjenestekode','Tjeneste','Tjenestested','Fag/profil','Koststed','Leder','Startdato','Sluttdato','Stillingskode','Stillingsnavn','Ansettelsestype','Lønnsform','Stillingsprosent','Ukentlig arbeidstid','Lønnsgrunnlag','Lønnsprosent','Årslønn','Skatteprosent','Pensjonsprosent','Ekstra skattetrekk','Feriepengesats','Status','Bruk standardlønn','Fast trekk navn','Fast trekk beløp'
+  'Ansattnummer','Navn','Fødselsdato','E-post','Telefon','Avdeling','Tjenestekode','Tjeneste','Tjenestested','Fag/profil','Koststed','Leder','Startdato','Sluttdato','Stillingskode','Stillingsnavn','Ansettelsestype','Lønnsform','Stillingsprosent','Ukentlig arbeidstid','Lønnsgrunnlag','Lønnsprosent','Årslønn','Skatteprosent','Pensjonsprosent','Ekstra skattetrekk','Feriepengesats','Status','Bruk standardlønn','Fast trekk navn','Fast trekk beløp'
 ];
 const VARIABLE_IMPORT_HEADERS = ['Ansattnummer','Lønnskode','Dato','Antall','Sats','Beløp','Kommentar','Status'];
 const POSITION_IMPORT_HEADERS = ['Stillingskode','Stillingsnavn','Standard stillingsnavn','Tjenestekode','Lønnsgrunnlag','Lønnsprosent','Ukentlig arbeidstid','Lønnsform','Ansettelsestype','Aktiv'];
@@ -1610,7 +1392,7 @@ function parseImportedEmployees(workbook){
     if(!annualSalaryBasis&&rowAnnual)annualSalaryBasis=rowAnnual/(salaryPercent/100||1);
     const fixedName=String(importCell(row,'Fast trekk navn')||'').trim(),fixedAmount=importNumber(importCell(row,'Fast trekk beløp'),0);
     employees.push({
-      employeeNo,resourceNo:String(importCell(row,'Ressursnummer','Ressursnr')||employeeNo).trim(),name,
+      employeeNo,name,
       birthDate:importIsoDate(importCell(row,'Fødselsdato')),
       email:String(importCell(row,'E-post')||'').trim(),phone:String(importCell(row,'Telefon')||'').trim(),
       department:String(importCell(row,'Avdeling')||'HR-avdelingen').trim(),
@@ -1701,12 +1483,7 @@ document.addEventListener('click',e=>{
 });
 $('#mainNav').addEventListener('click',e=>{const b=e.target.closest('[data-view]');if(b)setView(b.dataset.view)});
 $('#mobileMenuBtn').addEventListener('click',()=>$('.sidebar').classList.toggle('open'));
-$('#roleSelect').addEventListener('change',e=>{state.ui.role=e.target.value;ensureRoleContext();currentView='dashboard';queueSave();toast(`Rolle: ${e.target.options[e.target.selectedIndex].text}`);render()});
-$('#contextSelect').addEventListener('change',e=>{
-  if(state.ui.role==='employee')state.ui.selectedEmployeeId=e.target.value;
-  if(state.ui.role==='leader')state.ui.selectedManager=e.target.value;
-  currentView='dashboard';queueSave();render();
-});
+$('#roleSelect').addEventListener('change',e=>{state.ui.role=e.target.value;queueSave();toast(`Rolle: ${e.target.options[e.target.selectedIndex].text}`);render()});
 $('#themeBtn').addEventListener('click',()=>{state.ui.theme=state.ui.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=state.ui.theme;queueSave()});
 $('#excelImportInput').addEventListener('change',async e=>{
   const file=e.target.files[0];if(!file)return;
@@ -1721,10 +1498,9 @@ $('#importInput').addEventListener('change',async e=>{
 (async function init(){
   state=await loadState()||defaultState();
   migrateState();
-  state.ui ||= {theme:'light',role:'admin',selectedEmployeeId:'',selectedManager:''};
+  state.ui ||= {theme:'light',role:'admin',selectedEmployeeId:''};
   document.documentElement.dataset.theme=state.ui.theme||'light';
   $('#roleSelect').value=state.ui.role||'admin';
-  ensureRoleContext();
   render();
   if('serviceWorker' in navigator){
     window.addEventListener('load',()=>navigator.serviceWorker.register('./service-worker.js').catch(console.warn));
