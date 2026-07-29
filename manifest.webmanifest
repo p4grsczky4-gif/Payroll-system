@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="nb">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#5f5ce6">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Lønn Demo">
+  <title>Lønnssystem Demo</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+  <link rel="icon" href="./icons/icon-192.png">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div id="appShell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">L</div>
+        <div>
+          <strong>Lønnssystem</strong>
+          <span>Demo</span>
+        </div>
+      </div>
+
+      <nav id="mainNav" aria-label="Hovedmeny">
+        <button class="nav-item active" data-view="dashboard"><span>⌂</span>Oversikt</button>
+        <button class="nav-item" data-view="employees"><span>♙</span>Ansatte</button>
+        <button class="nav-item" data-view="variable"><span>＋</span>Variabel lønn</button>
+        <button class="nav-item" data-view="consultant"><span>✓</span>Lønnskonsulent</button>
+        <button class="nav-item" data-view="runs"><span>▶</span>Lønnskjøring</button>
+        <button class="nav-item" data-view="payslips"><span>▤</span>Lønnsslipper</button>
+        <button class="nav-item" data-view="reports"><span>▥</span>Rapporter</button>
+        <button class="nav-item" data-view="settings"><span>⚙</span>Oppsett</button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <small>Lokalt arbeidsverktøy</small>
+        <strong>Balazs Bodi</strong>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <button id="mobileMenuBtn" class="icon-btn mobile-only" aria-label="Åpne meny">☰</button>
+          <p class="eyebrow" id="viewEyebrow">Lønnssystem Demo</p>
+          <h1 id="viewTitle">Oversikt</h1>
+        </div>
+        <div class="topbar-actions">
+          <label class="role-switch">
+            <span>Rolle</span>
+            <select id="roleSelect">
+              <option value="admin">Systemadministrator</option>
+              <option value="leader">Leder</option>
+              <option value="payroll">Lønnskonsulent</option>
+              <option value="employee">Ansatt</option>
+            </select>
+          </label>
+          <button id="themeBtn" class="icon-btn" title="Bytt tema">◐</button>
+        </div>
+      </header>
+
+      <section id="viewRoot" class="view-root" aria-live="polite"></section>
+    </main>
+  </div>
+
+  <div id="toastHost" class="toast-host"></div>
+  <div id="modalHost"></div>
+  <input id="importInput" type="file" accept=".json,application/json" hidden>
+
+  <script src="./app.js"></script>
+</body>
+</html>
