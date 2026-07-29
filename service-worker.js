@@ -1,39 +1,50 @@
-const CACHE_NAME = 'payroll-demo-v1.0.1';
-const ASSETS = [
-  './',
-  './index.html',
-  './manifest.webmanifest',
-  './icons/icon-192.png',
-  './icons/icon-512.png',
-  './icons/apple-touch-icon.png'
-];
+# Lønnssystem Demo v1.0.3
 
-self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)));
-  self.skipWaiting();
-});
+## Nytt i denne versjonen
 
-self.addEventListener('activate', event => {
-  event.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key)))
-    )
-  );
-  self.clients.claim();
-});
+### Nye lønnsarter
+- 3200 – Lønnslån utbetaling
+- 6200 – Lønnslån avdrag
+- 6210 – Inkassotrekk
+- 6220 – Påleggstrekk
+- 6230 – Fagforeningstrekk
+- 6290 – Annet fast trekk
 
-self.addEventListener('fetch', event => {
-  if (event.request.method !== 'GET') return;
+### Lån og trekk per ansatt
+Åpne `Ansatte` og trykk `Lån og trekk` på den aktuelle ansatte.
 
-  event.respondWith(
-    fetch(event.request)
-      .then(response => {
-        const copy = response.clone();
-        caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
-        return response;
-      })
-      .catch(() => caches.match(event.request).then(
-        cached => cached || caches.match('./index.html')
-      ))
-  );
-});
+En trekkavtale kan inneholde:
+- lønnsart og lønnskode
+- referanse eller saksnummer
+- totalt skyldig beløp
+- månedlig trekk eller engangstrekk
+- beløp per måned
+- startdato
+- sluttdato
+- aktiv eller pauset status
+- kommentar
+
+Appen beregner automatisk:
+- tidligere trukket beløp
+- restsaldo
+- neste trekk i aktuell lønnskjøring
+- siste termin, som begrenses til gjenværende restsaldo
+
+Trekket blir automatisk tatt med når lønnskjøringen beregnes.
+
+### Rapporter
+- Detaljert lønnsjournal viser lønnskode og referanse
+- Trekkrapport viser hver trekkart på egen linje
+- Ny rapport: `Trekkavtaler`
+- CSV-eksport støtter trekkavtaler og detaljerte trekk
+
+## Oppdatering på GitHub Pages
+1. Pakk ut ZIP-filen.
+2. Slett eller erstatt de gamle filene i GitHub-repositoryet.
+3. Last opp alle filene og hele `icons`-mappen.
+4. Commit endringene.
+5. Vent på at GitHub Pages er publisert.
+6. Åpne appen én gang med `?v=103` på slutten av adressen.
+
+Eksisterende ansatte og registreringer beholdes fordi dataene ligger lokalt i nettleseren.
+Ta likevel gjerne en JSON-backup under `Oppsett` før oppdateringen.
