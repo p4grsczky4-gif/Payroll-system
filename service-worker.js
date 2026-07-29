@@ -1,32 +1,39 @@
-# Lønnssystem Demo
+const CACHE_NAME = 'payroll-demo-v1.0.1';
+const ASSETS = [
+  './',
+  './index.html',
+  './manifest.webmanifest',
+  './icons/icon-192.png',
+  './icons/icon-512.png',
+  './icons/apple-touch-icon.png'
+];
 
-En komplett lokal demo av et HR- og lønnssystem bygget i HTML, CSS og JavaScript.
+self.addEventListener('install', event => {
+  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)));
+  self.skipWaiting();
+});
 
-## Innhold
-- Ansattregister med fastlønn, stillingsprosent, skatt, pensjon og faste poster
-- Lederportal for variabel lønn
-- Kontrollkø for lønnskonsulent
-- Lønnskjøringer med beregning, kontroll og avslutning
-- Simulerte lønnsslipper
-- Lønnsjournal, avdelingsrapport, trekkrapport og lønnsartrapport
-- CSV-eksport og JSON-backup
-- IndexedDB-lagring
-- PWA med offline-støtte og appikoner
-- Mobilvennlig design uten brede registreringstabeller
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    caches.keys().then(keys =>
+      Promise.all(keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key)))
+    )
+  );
+  self.clients.claim();
+});
 
-## Publisering på GitHub Pages
-1. Opprett et nytt offentlig eller privat GitHub-repository.
-2. Last opp **innholdet i denne mappen** til roten av repositoryet.
-3. Åpne `Settings` → `Pages`.
-4. Velg `Deploy from a branch`, grenen `main` og mappen `/ (root)`.
-5. Åpne adressen GitHub viser.
+self.addEventListener('fetch', event => {
+  if (event.request.method !== 'GET') return;
 
-På iPhone:
-1. Åpne siden i Safari.
-2. Trykk Del.
-3. Velg «Legg til på Hjem-skjermen».
-
-## Viktig
-Data lagres lokalt i nettleseren. Bruk `Oppsett → Eksporter backup` før sletting av nettleserdata eller bytte av enhet.
-
-Demoen bruker forenklet prosentberegning av skatt og pensjon og kommuniserer ikke med bank, Altinn eller andre systemer.
+  event.respondWith(
+    fetch(event.request)
+      .then(response => {
+        const copy = response.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
+        return response;
+      })
+      .catch(() => caches.match(event.request).then(
+        cached => cached || caches.match('./index.html')
+      ))
+  );
+});
