@@ -94,7 +94,16 @@ tr:last-child td{border-bottom:0}.money{text-align:right;font-variant-numeric:ta
   body{background:white}.sidebar,.topbar,.page-actions,.no-print,.toast-host{display:none!important}.main,.view-root{padding:0!important}.card{box-shadow:none;border:0}.payslip{box-shadow:none;padding:0;max-width:none}
 }
 
-  </style>
+  
+.salary-table-input{width:150px;border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:10px;padding:9px 10px;text-align:right;font-variant-numeric:tabular-nums}
+.salary-table-input:focus{outline:0;border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
+.standard-salary-box{background:var(--primary-soft);border:1px solid color-mix(in srgb,var(--primary) 24%,var(--line));border-radius:14px;padding:13px 14px}
+.standard-salary-box .help{margin:3px 0 0 26px}
+.position-code-label{display:inline-flex;align-items:center;gap:6px;font-weight:900;font-variant-numeric:tabular-nums}
+.position-code-summary{display:grid;gap:3px}
+.position-code-summary small{color:var(--muted)}
+
+</style>
 </head>
 <body>
   <div id="appShell">
@@ -200,7 +209,18 @@ const HR_SERVICES = [
   {code:'31000',name:'Adm. vikarer'},
   {code:'31100',name:'Vikarer'}
 ];
+const DEFAULT_APPRENTICE_SALARY = 330000;
+const DEFAULT_POSITION_CODES = [
+  {id:'pc_apprentice_bua',code:'9501',name:'Lærling – BUA-fag',positionTitle:'Lærling – barne- og ungdomsarbeiderfag',annualSalary:DEFAULT_APPRENTICE_SALARY,weeklyHours:37.5,salaryType:'monthly',employmentType:'Lærling',serviceCode:'21100',active:true},
+  {id:'pc_apprentice_health',code:'9502',name:'Lærling – helsefag',positionTitle:'Lærling – helsearbeiderfag',annualSalary:DEFAULT_APPRENTICE_SALARY,weeklyHours:35.5,salaryType:'monthly',employmentType:'Lærling',serviceCode:'21100',active:true},
+  {id:'pc_apprentice_admin',code:'9503',name:'Lærling – administrasjonsfag',positionTitle:'Lærling – service- og administrasjonsfag',annualSalary:DEFAULT_APPRENTICE_SALARY,weeklyHours:37.5,salaryType:'monthly',employmentType:'Lærling',serviceCode:'21000',active:true},
+  {id:'pc_hr_temp',code:'9601',name:'HR-konsulent (vikar)',positionTitle:'HR-konsulent (vikar)',annualSalary:570000,weeklyHours:37.5,salaryType:'monthly',employmentType:'Vikariat',serviceCode:'31000',active:true},
+  {id:'pc_substitute',code:'9701',name:'Tilkallingsvikar',positionTitle:'Tilkallingsvikar',annualSalary:450000,weeklyHours:35.5,salaryType:'hourly',employmentType:'Tilkalling',serviceCode:'31100',active:true},
+  {id:'pc_hr_advisor',code:'9801',name:'HR-rådgiver',positionTitle:'HR-rådgiver',annualSalary:650000,weeklyHours:37.5,salaryType:'monthly',employmentType:'Fast',serviceCode:'12000',active:true}
+];
 function serviceByCode(code){ return HR_SERVICES.find(s=>s.code===String(code)); }
+function defaultPositionCodes(){ return DEFAULT_POSITION_CODES.map(p=>({...p})); }
+function defaultPositionCodeById(id){ return DEFAULT_POSITION_CODES.find(p=>p.id===id); }
 function demoDate(year,month,day){ return `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`; }
 function buildHrDemoData(){
   const employees=[],variableEntries=[];
@@ -209,23 +229,24 @@ function buildHrDemoData(){
   let seq=0,employeeNo=2001;
   const uniqueName=()=>{const i=seq++;return `${firstNames[i%firstNames.length]} ${lastNames[(i*17+Math.floor(i/firstNames.length)*5)%lastNames.length]}`;};
   const addGroup=(count,cfg)=>{
+    const positionCode=defaultPositionCodeById(cfg.positionCodeId);
     for(let i=0;i<count;i++){
       const name=uniqueName(),no=String(employeeNo++),location=cfg.locations[i%cfg.locations.length];
-      const apprentice=Boolean(cfg.apprentice),hourly=cfg.salaryType==='hourly';
-      const annual=typeof cfg.annualSalary==='function'?cfg.annualSalary(i):cfg.annualSalary;
+      const apprentice=Boolean(cfg.apprentice),salaryType=cfg.salaryType||positionCode?.salaryType||'monthly';
+      const annual=typeof cfg.annualSalary==='function'?cfg.annualSalary(i):Number(cfg.annualSalary??positionCode?.annualSalary??0);
       const birthYear=apprentice?2002+(i%5):1982+(i%20);
       const employee={
         id:`hr_emp_${no}`,employeeNo:no,name,birthDate:demoDate(birthYear,(i%12)+1,(i%27)+1),
         email:`${name.toLowerCase().replaceAll(' ','-').replaceAll('æ','ae').replaceAll('ø','o').replaceAll('å','a')}@demo.no`,phone:`9${String(1000000+i+Number(no)).slice(-7)}`,
-        department:'HR-avdelingen',serviceCode:cfg.serviceCode,serviceName:serviceByCode(cfg.serviceCode)?.name||'',serviceLocation:location,
-        discipline:cfg.discipline||'',costCenter:`${cfg.serviceCode}-${String((i%9)+1).padStart(2,'0')}`,manager:cfg.manager,
-        startDate:cfg.startDate||'2025-08-01',endDate:'',positionTitle:cfg.positionTitle,employmentType:cfg.employmentType,
-        salaryType:cfg.salaryType,positionPercent:cfg.positionPercent??100,weeklyHours:cfg.weeklyHours||37.5,annualSalary:annual,
+        department:'HR-avdelingen',serviceCode:cfg.serviceCode||positionCode?.serviceCode||'12000',serviceName:serviceByCode(cfg.serviceCode||positionCode?.serviceCode)?.name||'',serviceLocation:location,
+        discipline:cfg.discipline||'',costCenter:`${cfg.serviceCode||positionCode?.serviceCode}-${String((i%9)+1).padStart(2,'0')}`,manager:cfg.manager,
+        startDate:cfg.startDate||'2025-08-01',endDate:'',positionCodeId:cfg.positionCodeId||'',useStandardSalary:Boolean(cfg.positionCodeId),positionTitle:cfg.positionTitle||positionCode?.positionTitle||positionCode?.name||'',employmentType:cfg.employmentType||positionCode?.employmentType||'Fast',
+        salaryType,positionPercent:cfg.positionPercent??100,weeklyHours:cfg.weeklyHours||positionCode?.weeklyHours||37.5,annualSalary:annual,
         taxRate:24+(i%7),pensionRate:2,extraTax:0,vacationRate:12,status:'active',fixedItems:[],deductionPlans:[],demoGroup:'hr-department'
       };
       if(i%11===0) employee.fixedItems.push({id:`fi_union_${no}`,name:'Fagforeningstrekk',amount:420+(i%4)*25,kind:'deduction'});
       employees.push(employee);
-      if(hourly){
+      if(salaryType==='hourly'){
         const hours=48+((i*13)%73);
         variableEntries.push({id:`hr_ve_${no}`,employeeId:employee.id,wageTypeId:'wt_extra',date:'2026-07-15',quantity:hours,rate:0,amount:0,comment:`Demo: ${hours} vikartimer`,status:'approved',createdBy:'Vikaradministrasjon',createdAt:'2026-07-18T09:00:00Z',approvedAt:'2026-07-19T10:00:00Z',demoGroup:'hr-department'});
         if(i%5===0) variableEntries.push({id:`hr_ve_weekend_${no}`,employeeId:employee.id,wageTypeId:'wt_weekend',date:'2026-07-20',quantity:8+(i%4)*2,rate:70,amount:0,comment:'Demo: helgetillegg',status:'approved',createdBy:'Vikaradministrasjon',createdAt:'2026-07-20T12:00:00Z',approvedAt:'2026-07-21T08:00:00Z',demoGroup:'hr-department'});
@@ -234,12 +255,12 @@ function buildHrDemoData(){
       }
     }
   };
-  addGroup(25,{serviceCode:'21100',discipline:'BUA-fag',positionTitle:'Lærling – barne- og ungdomsarbeiderfag',employmentType:'Lærling',salaryType:'monthly',apprentice:true,annualSalary:i=>318000+(i%4)*14000,manager:'Lærlingkoordinator BUA',locations:['Fana barnehageområde','Åsane barnehageområde','Bergenhus barnehageområde','Ytrebygda skoleområde','Årstad oppvekst']});
-  addGroup(45,{serviceCode:'21100',discipline:'Helsefag',positionTitle:'Lærling – helsearbeiderfag',employmentType:'Lærling',salaryType:'monthly',apprentice:true,weeklyHours:35.5,annualSalary:i=>326000+(i%4)*15000,manager:'Lærlingkoordinator helse',locations:['Fana hjemmebaserte tjenester','Åsane sykehjem','Laksevåg hjemmebaserte tjenester','Arna helse og omsorg','Bergenhus omsorgstjenester']});
-  addGroup(8,{serviceCode:'21000',discipline:'Administrasjonsfag',positionTitle:'Lærling – service- og administrasjonsfag',employmentType:'Lærling',salaryType:'monthly',apprentice:true,annualSalary:i=>330000+(i%3)*15000,manager:'Leder lærlingadministrasjon',locations:['Lærlingadministrasjon – Fanatorget']});
-  addGroup(4,{serviceCode:'31000',positionTitle:'HR-konsulent (vikar)',employmentType:'Vikariat',salaryType:'monthly',annualSalary:i=>555000+i*15000,manager:'Avdelingsleder administrasjon',locations:['HR og lønn – Fanatorget']});
-  addGroup(43,{serviceCode:'31100',positionTitle:'Tilkallingsvikar',employmentType:'Tilkalling',salaryType:'hourly',positionPercent:0,weeklyHours:35.5,annualSalary:i=>438000+(i%5)*12000,manager:'Vikaradministrasjonen',locations:['Nedre Nattland','Svartediksveien avlastning','Åsane avlastning','Leirvikåsen 17','Fana hjemmesykepleie','Årstad omsorgsteam']});
-  addGroup(5,{serviceCode:'12000',positionTitle:'HR-rådgiver',employmentType:'Fast',salaryType:'monthly',annualSalary:i=>620000+i*27000,manager:'HR-sjef',locations:['HR og lønn – Fanatorget','HR-stab – Rådhuset']});
+  addGroup(25,{positionCodeId:'pc_apprentice_bua',serviceCode:'21100',discipline:'BUA-fag',apprentice:true,manager:'Lærlingkoordinator BUA',locations:['Fana barnehageområde','Åsane barnehageområde','Bergenhus barnehageområde','Ytrebygda skoleområde','Årstad oppvekst']});
+  addGroup(45,{positionCodeId:'pc_apprentice_health',serviceCode:'21100',discipline:'Helsefag',apprentice:true,manager:'Lærlingkoordinator helse',locations:['Fana hjemmebaserte tjenester','Åsane sykehjem','Laksevåg hjemmebaserte tjenester','Arna helse og omsorg','Bergenhus omsorgstjenester']});
+  addGroup(8,{positionCodeId:'pc_apprentice_admin',serviceCode:'21000',discipline:'Administrasjonsfag',apprentice:true,manager:'Leder lærlingadministrasjon',locations:['Lærlingadministrasjon – Fanatorget']});
+  addGroup(4,{positionCodeId:'pc_hr_temp',serviceCode:'31000',manager:'Avdelingsleder administrasjon',locations:['HR og lønn – Fanatorget']});
+  addGroup(43,{positionCodeId:'pc_substitute',serviceCode:'31100',positionPercent:0,manager:'Vikaradministrasjonen',locations:['Nedre Nattland','Svartediksveien avlastning','Åsane avlastning','Leirvikåsen 17','Fana hjemmesykepleie','Årstad omsorgsteam']});
+  addGroup(5,{positionCodeId:'pc_hr_advisor',serviceCode:'12000',manager:'HR-sjef',locations:['HR og lønn – Fanatorget','HR-stab – Rådhuset']});
   const collectionEmployee=employees.find(e=>e.serviceCode==='31100');
   if(collectionEmployee) collectionEmployee.deductionPlans.push({id:'hr_demo_collection',wageTypeId:'wt_collection',reference:'HR-DEMO-INK-01',totalAmount:18000,frequency:'monthly',installmentAmount:1500,startDate:'2026-07-01',endDate:'2027-06-30',status:'active',note:'Demoavtale for inkassotrekk.'});
   return {employees,variableEntries};
@@ -248,8 +269,9 @@ function buildHrDemoData(){
 function defaultState(){
   const demo=buildHrDemoData();
   return {
-    meta:{version:4, createdAt:new Date().toISOString(), company:'HR-avdelingen Demo', orgNo:'999 999 999', nextEmployeeNo:2131, employerTaxRate:14.1, employerPensionRate:7},
+    meta:{version:5, createdAt:new Date().toISOString(), company:'HR-avdelingen Demo', orgNo:'999 999 999', nextEmployeeNo:2131, employerTaxRate:14.1, employerPensionRate:7},
     ui:{theme:'light', role:'admin', selectedEmployeeId:demo.employees[0]?.id||''},
+    positionCodes:defaultPositionCodes(),
     wageTypes:[
       {id:'wt_evening',code:'2100',name:'Kveldstillegg',mode:'hours',rate:62.00,sign:1,taxable:true,pension:true,vacation:true,category:'Tillegg'},
       {id:'wt_night',code:'2110',name:'Nattillegg',mode:'hours',rate:78.00,sign:1,taxable:true,pension:true,vacation:true,category:'Tillegg'},
@@ -345,6 +367,32 @@ function statusBadge(status){
 }
 function employeeById(id){ return state.employees.find(e=>e.id===id); }
 function wageTypeById(id){ return state.wageTypes.find(w=>w.id===id); }
+function positionCodeById(id){ return (state.positionCodes||[]).find(p=>p.id===id); }
+function employeePositionCode(e){ return e?.positionCodeId ? positionCodeById(e.positionCodeId) : null; }
+function inferDemoPositionCodeId(e){
+  const title=String(e.positionTitle||'').toLowerCase(),discipline=String(e.discipline||'').toLowerCase();
+  if(e.employmentType==='Lærling'||title.includes('lærling')){
+    if(e.serviceCode==='21000'||discipline.includes('admin')) return 'pc_apprentice_admin';
+    if(discipline.includes('bua')||title.includes('barne- og ungdom')) return 'pc_apprentice_bua';
+    return 'pc_apprentice_health';
+  }
+  if(e.serviceCode==='31000') return 'pc_hr_temp';
+  if(e.serviceCode==='31100') return 'pc_substitute';
+  if(e.serviceCode==='12000') return 'pc_hr_advisor';
+  return '';
+}
+function syncPositionCodeEmployees(positionCodeId){
+  const position=positionCodeById(positionCodeId);
+  if(!position) return 0;
+  let updated=0;
+  state.employees.forEach(e=>{
+    if(e.positionCodeId===positionCodeId && e.useStandardSalary!==false){
+      e.annualSalary=Number(position.annualSalary||0);
+      updated++;
+    }
+  });
+  return updated;
+}
 function employeeHourly(e){ return Number(e.annualSalary||0)/(Number(e.weeklyHours||37.5)*52); }
 function monthlySalary(e){ return e.salaryType==='monthly' ? Number(e.annualSalary||0)*(Number(e.positionPercent||0)/100)/12 : 0; }
 function fixedEarnings(e){ return (e.fixedItems||[]).filter(i=>i.kind==='earning').reduce((s,i)=>s+Number(i.amount||0),0); }
@@ -392,10 +440,14 @@ function deductionPlanBadge(plan){
 function migrateState(){
   const defaults=defaultState();
   state.meta ||= {};
-  state.meta.version=4;
+  state.meta.version=5;
   state.meta.employerTaxRate ??= 14.1;
   state.meta.employerPensionRate ??= 7;
   state.ui ||= defaults.ui;
+  state.positionCodes ||= [];
+  defaults.positionCodes.forEach(p=>{
+    if(!state.positionCodes.some(existing=>existing.id===p.id||existing.code===p.code)) state.positionCodes.push({...p});
+  });
   state.wageTypes ||= [];
   defaults.wageTypes.forEach(w=>{
     if(!state.wageTypes.some(existing=>existing.id===w.id||existing.code===w.code)) state.wageTypes.push({...w});
@@ -409,12 +461,22 @@ function migrateState(){
     e.serviceName ||= serviceByCode(e.serviceCode)?.name || e.department || 'Administrasjon';
     e.serviceLocation ||= e.department || 'Ikke angitt';
     e.discipline ||= '';
+    if(!e.positionCodeId && e.demoGroup==='hr-department') e.positionCodeId=inferDemoPositionCodeId(e);
+    if(e.positionCodeId){
+      e.useStandardSalary ??= e.demoGroup==='hr-department';
+      const position=positionCodeById(e.positionCodeId);
+      if(position && e.useStandardSalary!==false) e.annualSalary=Number(position.annualSalary||0);
+    }else{
+      e.positionCodeId='';
+      e.useStandardSalary ??= false;
+    }
   });
   state.variableEntries ||= [];
   state.runs ||= [];
   state.payslips ||= [];
   state.audit ||= [];
 }
+
 function entryAmount(entry){
   const e=employeeById(entry.employeeId), wt=wageTypeById(entry.wageTypeId);
   if(!e||!wt) return 0;
@@ -495,45 +557,46 @@ function renderDashboard(){
 function stat(label,value,note){return `<div class="card stat-card"><div class="stat-label">${esc(label)}</div><div class="stat-value">${value}</div><div class="stat-note">${esc(note)}</div></div>`}
 
 function renderEmployees(){
-  const searchText=e=>(e.name+' '+e.employeeNo+' '+e.department+' '+(e.serviceCode||'')+' '+(e.serviceName||'')+' '+(e.serviceLocation||'')+' '+(e.discipline||'')).toLowerCase();
-  const cards=state.employees.map(e=>`
+  const searchText=e=>{const p=employeePositionCode(e);return (e.name+' '+e.employeeNo+' '+e.department+' '+(e.serviceCode||'')+' '+(e.serviceName||'')+' '+(e.serviceLocation||'')+' '+(e.discipline||'')+' '+(p?.code||'')+' '+(p?.name||'')).toLowerCase();};
+  const cards=state.employees.map(e=>{const p=employeePositionCode(e);return `
     <div class="card employee-card employee-row" data-search="${esc(searchText(e))}">
       <div class="employee-head">
         <div class="employee-main"><div class="avatar">${initials(e.name)}</div><div><strong>${esc(e.name)}</strong><small class="muted">#${esc(e.employeeNo)} · ${esc(e.positionTitle)}</small></div></div>
         ${statusBadge(e.status)}
       </div>
-      <div class="employee-meta"><span class="badge primary"><span class="service-code">${esc(e.serviceCode||'–')}</span> ${esc(e.serviceName||'')}</span><span class="badge">${esc(e.serviceLocation||'Ikke angitt')}</span>${e.discipline?`<span class="badge">${esc(e.discipline)}</span>`:''}</div>
+      <div class="employee-meta"><span class="badge primary"><span class="service-code">${esc(e.serviceCode||'–')}</span> ${esc(e.serviceName||'')}</span>${p?`<span class="badge">Stillingskode ${esc(p.code)}</span>`:''}<span class="badge">${esc(e.serviceLocation||'Ikke angitt')}</span>${e.discipline?`<span class="badge">${esc(e.discipline)}</span>`:''}</div>
       <div class="kpi-row">
         <div class="mini-kpi"><small>Årslønn 100 %</small><strong>${money(e.annualSalary)}</strong></div>
-        <div class="mini-kpi"><small>Månedslønn</small><strong>${money(monthlySalary(e))}</strong></div>
+        <div class="mini-kpi"><small>Lønnskilde</small><strong>${e.useStandardSalary&&p?'Standard':'Manuell'}</strong></div>
         <div class="mini-kpi"><small>Timesats</small><strong>${money(employeeHourly(e))}</strong></div>
       </div>
       <div class="actions"><button class="btn small primary" data-edit-employee="${e.id}">Rediger</button><button class="btn small ghost" data-deduction-plans="${e.id}">Lån og trekk${(e.deductionPlans||[]).length?` (${(e.deductionPlans||[]).length})`:''}</button><button class="btn small ghost" data-employee-payslip="${e.id}">Lønnsslipp</button></div>
-    </div>`).join('');
+    </div>`}).join('');
   return `
     <div class="page-actions">
-      <div class="filters"><input id="employeeSearch" class="search" placeholder="Søk etter navn, tjeneste, fag eller tjenestested"></div>
+      <div class="filters"><input id="employeeSearch" class="search" placeholder="Søk etter navn, stillingskode, tjeneste, fag eller tjenestested"></div>
       <button class="btn primary" data-action="new-employee">＋ Ny ansatt</button>
     </div>
     <div class="desktop-table table-wrap">
-      <table><thead><tr><th>Ansatt</th><th>Tjeneste</th><th>Tjenestested</th><th>Stilling</th><th>Omfang</th><th>Årslønn</th><th>Status</th><th></th></tr></thead>
+      <table><thead><tr><th>Ansatt</th><th>Tjeneste</th><th>Tjenestested</th><th>Stillingskode</th><th>Stilling</th><th>Årslønn</th><th>Status</th><th></th></tr></thead>
       <tbody>
-        ${state.employees.map(e=>`<tr class="employee-row" data-search="${esc(searchText(e))}">
+        ${state.employees.map(e=>{const p=employeePositionCode(e);return `<tr class="employee-row" data-search="${esc(searchText(e))}">
           <td><strong>${esc(e.name)}</strong><small class="muted">#${esc(e.employeeNo)}</small></td>
           <td><span class="service-code">${esc(e.serviceCode||'–')}</span><small class="muted">${esc(e.serviceName||'')}</small></td>
           <td>${esc(e.serviceLocation||'Ikke angitt')}<small class="muted">${esc(e.costCenter||'')}</small></td>
+          <td>${p?`<strong>${esc(p.code)}</strong><small class="muted">${e.useStandardSalary?'Standardlønn':'Manuell lønn'}</small>`:'<span class="muted">Ikke valgt</span>'}</td>
           <td>${esc(e.positionTitle)}<small class="muted">${esc(e.discipline||e.employmentType)}</small></td>
-          <td>${esc(e.positionPercent)} % · ${esc(e.weeklyHours)} t</td>
           <td class="money">${money(e.annualSalary)}</td><td>${statusBadge(e.status)}</td>
           <td><div class="actions"><button class="btn small primary" data-edit-employee="${e.id}">Rediger</button><button class="btn small ghost" data-deduction-plans="${e.id}">Lån og trekk${(e.deductionPlans||[]).length?` (${(e.deductionPlans||[]).length})`:''}</button><button class="btn small ghost" data-employee-payslip="${e.id}">Lønnsslipp</button></div></td>
-        </tr>`).join('')}
+        </tr>`}).join('')}
       </tbody></table>
     </div>
     <div class="mobile-cards">${cards}</div>`;
 }
 
 function employeeModal(emp=null){
-  const e=emp||{id:'',employeeNo:String(state.meta.nextEmployeeNo),name:'',birthDate:'',email:'',phone:'',department:'HR-avdelingen',serviceCode:'12000',serviceName:'Administrasjon',serviceLocation:'HR og lønn – Fanatorget',discipline:'',costCenter:'12000-01',manager:'',startDate:today(),endDate:'',positionTitle:'',employmentType:'Fast',salaryType:'monthly',positionPercent:100,weeklyHours:37.5,annualSalary:500000,taxRate:28,pensionRate:2,extraTax:0,vacationRate:12,status:'active',fixedItems:[],deductionPlans:[]};
+  const e=emp||{id:'',employeeNo:String(state.meta.nextEmployeeNo),name:'',birthDate:'',email:'',phone:'',department:'HR-avdelingen',serviceCode:'12000',serviceName:'Administrasjon',serviceLocation:'HR og lønn – Fanatorget',discipline:'',costCenter:'12000-01',manager:'',startDate:today(),endDate:'',positionCodeId:'',useStandardSalary:false,positionTitle:'',employmentType:'Fast',salaryType:'monthly',positionPercent:100,weeklyHours:37.5,annualSalary:500000,taxRate:28,pensionRate:2,extraTax:0,vacationRate:12,status:'active',fixedItems:[],deductionPlans:[]};
+  const positionOptions=[['','Ingen stillingskode'],...state.positionCodes.filter(p=>p.active!==false).sort((a,b)=>a.code.localeCompare(b.code)).map(p=>[p.id,`${p.code} – ${p.name} · ${money(p.annualSalary)}`])];
   openModal(emp?'Rediger ansatt':'Ny ansatt',`
     <form id="employeeForm" class="form-grid">
       <input type="hidden" name="id" value="${esc(e.id)}">
@@ -548,8 +611,10 @@ function employeeModal(emp=null){
       ${field('serviceLocation','Tjenestested',e.serviceLocation||'','text',true)}
       ${field('discipline','Fag / profil',e.discipline||'')}
       ${field('costCenter','Koststed / kontering',e.costCenter,'text',true)}
+      ${selectField('positionCodeId','Stillingskode og standardlønn',e.positionCodeId||'',positionOptions)}
+      <div class="field full standard-salary-box"><label class="inline-check"><input id="useStandardSalary" type="checkbox" name="useStandardSalary" ${e.useStandardSalary?'checked':''}> Bruk standardlønn fra stillingskoden</label><p id="salaryLinkHelp" class="help"></p></div>
       ${field('positionTitle','Stillingsnavn',e.positionTitle,'text',true)}
-      ${selectField('employmentType','Ansettelsestype',e.employmentType,['Fast','Midlertidig','Vikariat','Tilkalling'])}
+      ${selectField('employmentType','Ansettelsestype',e.employmentType,['Fast','Lærling','Midlertidig','Vikariat','Tilkalling'])}
       ${selectField('salaryType','Lønnsform',e.salaryType,[['monthly','Månedslønn'],['hourly','Timelønn']])}
       ${field('positionPercent','Stillingsprosent',e.positionPercent,'number',true,'0.01')}
       ${selectField('weeklyHours','Ukentlig arbeidstid',String(e.weeklyHours),[['37.5','37,5 timer'],['35.5','35,5 timer']])}
@@ -565,7 +630,34 @@ function employeeModal(emp=null){
     </form>`,
     `<button class="btn ghost" data-close-modal>Avbryt</button><button class="btn primary" id="saveEmployeeBtn">Lagre ansatt</button>`
   );
+  bindEmployeePositionCodeForm();
 }
+function bindEmployeePositionCodeForm(){
+  const select=$('#positionCodeId'),standard=$('#useStandardSalary'),salary=$('#annualSalary'),help=$('#salaryLinkHelp');
+  if(!select||!standard||!salary) return;
+  let applying=false;
+  const updateHelp=()=>{
+    const p=positionCodeById(select.value);
+    if(!p){help.textContent='Velg en stillingskode for å hente standardlønn. Årslønnen kan fortsatt registreres manuelt.';return;}
+    help.textContent=standard.checked?`Knyttet til ${p.code}. Endringer i årslønnstabellen oppdaterer denne ansatte automatisk.`:`Stillingskode ${p.code} er valgt, men årslønnen er et manuelt avvik og oppdateres ikke fra tabellen.`;
+  };
+  const apply=()=>{
+    const p=positionCodeById(select.value);if(!p)return;
+    applying=true;
+    $('#positionTitle').value=p.positionTitle||p.name;
+    $('#employmentType').value=p.employmentType||'Fast';
+    $('#salaryType').value=p.salaryType||'monthly';
+    $('#weeklyHours').value=String(p.weeklyHours||37.5);
+    if(p.serviceCode) $('#serviceCode').value=p.serviceCode;
+    if(standard.checked) salary.value=Number(p.annualSalary||0);
+    applying=false;updateHelp();
+  };
+  select.addEventListener('change',()=>{standard.checked=Boolean(select.value);apply();updateHelp();});
+  standard.addEventListener('change',()=>{if(standard.checked)apply();updateHelp();});
+  salary.addEventListener('input',()=>{if(!applying&&standard.checked){standard.checked=false;updateHelp();}});
+  updateHelp();
+}
+
 function fixedItemsEditor(items=[]){
   return items.map(i=>`<div class="list-item fixed-item-row" data-id="${esc(i.id)}">
     <div style="display:grid;grid-template-columns:1.4fr .8fr .8fr;gap:8px;flex:1">
@@ -969,38 +1061,93 @@ function renderEconomy(){
 }
 
 function renderSettings(){
+  const linkedCount=id=>state.employees.filter(e=>e.positionCodeId===id).length;
+  const linkedStandardCount=id=>state.employees.filter(e=>e.positionCodeId===id&&e.useStandardSalary!==false).length;
   return `
-    <div class="grid cols-2">
+    <div class="grid">
       <div class="card">
-        <div class="section-title"><div><h2>Lønnsarter</h2><small>${state.wageTypes.length} aktive definisjoner</small></div><button class="btn small primary" data-action="new-wagetype">＋ Ny</button></div>
-        <div class="list">${state.wageTypes.map(w=>`<div class="list-item"><div><strong>${esc(w.code)} · ${esc(w.name)}</strong><small>${esc(w.category)} · ${w.mode==='amount'?'Beløp':w.mode==='hours'?`Fast sats ${money(w.rate)}`:w.mode==='overtime'?`${w.multiplier*100}% av timesats`:'Timesats'}</small></div><button class="btn small ghost" data-edit-wagetype="${w.id}">Rediger</button></div>`).join('')}</div>
+        <div class="section-title"><div><h2>Stillingskoder og standardlønn</h2><small>Oppdater årslønn én gang og bruk den på alle tilknyttede ansatte</small></div><div class="actions"><button class="btn small ghost" data-action="new-position-code">＋ Ny stillingskode</button><button class="btn small primary" data-action="save-salary-table">Lagre alle satser</button></div></div>
+        <div class="notice"><strong>Lærlingene er nå standardisert:</strong> BUA, helsefag og administrative lærlinger har samme demo-årslønn på ${money(DEFAULT_APPRENTICE_SALARY)}. Du kan endre satsene direkte i tabellen.</div>
+        <div class="table-wrap" style="margin-top:15px"><table><thead><tr><th>Stillingskode</th><th>Stillingsnavn</th><th>Tjeneste</th><th>Standard årslønn</th><th>Tilknyttet</th><th></th></tr></thead><tbody>
+          ${state.positionCodes.slice().sort((a,b)=>a.code.localeCompare(b.code)).map(p=>`<tr><td><span class="position-code-label">${esc(p.code)}</span></td><td><div class="position-code-summary"><strong>${esc(p.name)}</strong><small>${esc(p.salaryType==='hourly'?'Timelønn':'Månedslønn')} · ${esc(p.weeklyHours)} t/uke</small></div></td><td><span class="service-code">${esc(p.serviceCode||'–')}</span><small class="muted">${esc(serviceByCode(p.serviceCode)?.name||'')}</small></td><td><input class="salary-table-input" data-position-salary="${p.id}" type="number" min="0" step="100" value="${Number(p.annualSalary||0)}"></td><td><strong>${linkedCount(p.id)}</strong><small class="muted">${linkedStandardCount(p.id)} bruker standard</small></td><td><button class="btn small ghost" data-edit-position-code="${p.id}">Rediger</button></td></tr>`).join('')}
+        </tbody></table></div>
+        <p class="help">Ansatte med «Bruk standardlønn» aktivert oppdateres automatisk når tabellen lagres. Manuelle lønnsavvik beholdes.</p>
       </div>
-      <div class="grid">
+      <div class="grid cols-2">
         <div class="card">
-          <div class="section-title"><h2>Data og backup</h2></div>
-          <p class="muted">Data lagres i IndexedDB i denne nettleseren. Eksporter en backup før du tømmer Safari-data eller bytter enhet.</p>
-          <div class="actions"><button class="btn primary" data-action="export-backup">Eksporter backup</button><button class="btn ghost" data-action="import-backup">Importer</button><button class="btn danger" data-action="reset-demo">Nullstill demo</button></div><div class="notice" style="margin-top:14px"><strong>HR-demo:</strong> 25 BUA-lærlinger, 45 helsefaglærlinger, 8 administrative lærlinger, 4 administrative vikarer, 43 vikarer og 5 administrative ansatte.</div><button class="btn ghost" style="margin-top:10px" data-action="load-hr-demo">Last inn / erstatt 130 HR-profiler</button>
+          <div class="section-title"><div><h2>Lønnsarter</h2><small>${state.wageTypes.length} aktive definisjoner</small></div><button class="btn small primary" data-action="new-wagetype">＋ Ny</button></div>
+          <div class="list">${state.wageTypes.map(w=>`<div class="list-item"><div><strong>${esc(w.code)} · ${esc(w.name)}</strong><small>${esc(w.category)} · ${w.mode==='amount'?'Beløp':w.mode==='hours'?`Fast sats ${money(w.rate)}`:w.mode==='overtime'?`${w.multiplier*100}% av timesats`:'Timesats'}</small></div><button class="btn small ghost" data-edit-wagetype="${w.id}">Rediger</button></div>`).join('')}</div>
         </div>
-        <div class="card">
-          <div class="section-title"><h2>Virksomhet</h2></div>
-          <form id="companyForm" class="form-grid">
-            ${field('companyName','Navn',state.meta.company,'text',true)}
-            ${field('companyOrg','Organisasjonsnummer',state.meta.orgNo)}
-            ${field('employerTaxRate','Arbeidsgiveravgift – demo %',state.meta.employerTaxRate,'number',true,'0.1')}
-            ${field('employerPensionRate','Arbeidsgiverpensjon – demo %',state.meta.employerPensionRate,'number',true,'0.1')}
-            <div class="field full"><button class="btn primary">Lagre oppsett</button></div>
-          </form>
-        </div>
-        <div class="card">
-          <div class="section-title"><h2>Teknisk status</h2></div>
-          <div class="list">
-            <div class="list-item"><div><strong>Lokalt datalager</strong><small>IndexedDB med localStorage-reserve</small></div><span class="badge success">Aktiv</span></div>
-            <div class="list-item"><div><strong>Installerbar app</strong><small>Manifest og service worker</small></div><span class="badge success">Klar</span></div>
-            <div class="list-item"><div><strong>Eksterne integrasjoner</strong><small>Bank, Altinn og UBW</small></div><span class="badge">Deaktivert</span></div>
+        <div class="grid">
+          <div class="card">
+            <div class="section-title"><h2>Data og backup</h2></div>
+            <p class="muted">Data lagres i IndexedDB i denne nettleseren. Eksporter en backup før du tømmer Safari-data eller bytter enhet.</p>
+            <div class="actions"><button class="btn primary" data-action="export-backup">Eksporter backup</button><button class="btn ghost" data-action="import-backup">Importer</button><button class="btn danger" data-action="reset-demo">Nullstill demo</button></div><div class="notice" style="margin-top:14px"><strong>HR-demo:</strong> 25 BUA-lærlinger, 45 helsefaglærlinger, 8 administrative lærlinger, 4 administrative vikarer, 43 vikarer og 5 administrative ansatte.</div><button class="btn ghost" style="margin-top:10px" data-action="load-hr-demo">Last inn / erstatt 130 HR-profiler</button>
+          </div>
+          <div class="card">
+            <div class="section-title"><h2>Virksomhet</h2></div>
+            <form id="companyForm" class="form-grid">
+              ${field('companyName','Navn',state.meta.company,'text',true)}
+              ${field('companyOrg','Organisasjonsnummer',state.meta.orgNo)}
+              ${field('employerTaxRate','Arbeidsgiveravgift – demo %',state.meta.employerTaxRate,'number',true,'0.1')}
+              ${field('employerPensionRate','Arbeidsgiverpensjon – demo %',state.meta.employerPensionRate,'number',true,'0.1')}
+              <div class="field full"><button class="btn primary">Lagre oppsett</button></div>
+            </form>
+          </div>
+          <div class="card">
+            <div class="section-title"><h2>Teknisk status</h2></div>
+            <div class="list">
+              <div class="list-item"><div><strong>Lokalt datalager</strong><small>IndexedDB med localStorage-reserve</small></div><span class="badge success">Aktiv</span></div>
+              <div class="list-item"><div><strong>Installerbar app</strong><small>Manifest og service worker</small></div><span class="badge success">Klar</span></div>
+              <div class="list-item"><div><strong>Eksterne integrasjoner</strong><small>Bank, Altinn og UBW</small></div><span class="badge">Deaktivert</span></div>
+            </div>
           </div>
         </div>
       </div>
     </div>`;
+}
+
+function positionCodeModal(position=null){
+  const p=position||{id:'',code:'',name:'',positionTitle:'',annualSalary:500000,weeklyHours:37.5,salaryType:'monthly',employmentType:'Fast',serviceCode:'12000',active:true};
+  openModal(position?'Rediger stillingskode':'Ny stillingskode',`
+    <form id="positionCodeForm" class="form-grid">
+      <input type="hidden" name="id" value="${esc(p.id)}">
+      ${field('positionCode','Stillingskode',p.code,'text',true)}
+      ${field('positionName','Navn i lønnstabellen',p.name,'text',true)}
+      ${field('positionTitleDefault','Standard stillingsnavn',p.positionTitle||p.name,'text',true)}
+      ${field('positionAnnualSalary','Standard årslønn',p.annualSalary,'number',true,'100')}
+      ${selectField('positionWeeklyHours','Ukentlig arbeidstid',String(p.weeklyHours),[['37.5','37,5 timer'],['35.5','35,5 timer']])}
+      ${selectField('positionSalaryType','Lønnsform',p.salaryType,[['monthly','Månedslønn'],['hourly','Timelønn']])}
+      ${selectField('positionEmploymentType','Ansettelsestype',p.employmentType,['Fast','Lærling','Midlertidig','Vikariat','Tilkalling'])}
+      ${selectField('positionServiceCode','Standard tjeneste',p.serviceCode||'12000',HR_SERVICES.map(s=>[s.code,`${s.code} – ${s.name}`]))}
+      <div class="field full"><label class="inline-check"><input type="checkbox" name="positionActive" ${p.active!==false?'checked':''}> Aktiv stillingskode</label></div>
+    </form>`,
+    `<button class="btn ghost" data-close-modal>Avbryt</button><button class="btn primary" id="savePositionCodeBtn">Lagre stillingskode</button>`
+  );
+}
+function saveSalaryTable(){
+  let changed=0,updatedEmployees=0;
+  $$('[data-position-salary]').forEach(input=>{
+    const position=positionCodeById(input.dataset.positionSalary);if(!position)return;
+    const value=Number(input.value||0);
+    if(value>=0&&value!==Number(position.annualSalary||0)){
+      position.annualSalary=value;changed++;updatedEmployees+=syncPositionCodeEmployees(position.id);
+    }
+  });
+  if(!changed) return toast('Ingen satser ble endret');
+  audit(`${changed} standardlønninger ble oppdatert. ${updatedEmployees} ansatte fikk ny årslønn.`,'Systemadministrator');
+  queueSave();render();toast(`${changed} satser lagret · ${updatedEmployees} ansatte oppdatert`);
+}
+function savePositionCode(){
+  const form=$('#positionCodeForm');if(!form?.reportValidity())return;
+  const f=new FormData(form),id=String(f.get('id')||uid('pc')),code=String(f.get('positionCode')||'').trim();
+  if(state.positionCodes.some(p=>p.id!==id&&p.code===code)) return alert('Stillingskoden finnes allerede.');
+  const old=positionCodeById(id);
+  const obj={id,code,name:String(f.get('positionName')||'').trim(),positionTitle:String(f.get('positionTitleDefault')||'').trim(),annualSalary:Number(f.get('positionAnnualSalary')),weeklyHours:Number(f.get('positionWeeklyHours')),salaryType:String(f.get('positionSalaryType')),employmentType:String(f.get('positionEmploymentType')),serviceCode:String(f.get('positionServiceCode')),active:f.has('positionActive')};
+  if(old) Object.assign(old,obj); else state.positionCodes.push(obj);
+  const updated=syncPositionCodeEmployees(id);
+  audit(`Stillingskode ${obj.code} ble ${old?'oppdatert':'opprettet'}. ${updated} ansatte bruker standardlønnen.`,'Systemadministrator');
+  queueSave();closeModal();render();toast(`Stillingskode lagret · ${updated} ansatte oppdatert`);
 }
 
 function wageTypeModal(w=null){
@@ -1044,6 +1191,9 @@ function bindViewEvents(){
   $('[data-action="export-report"]')?.addEventListener('click',exportReport);
   $('[data-action="export-economy"]')?.addEventListener('click',exportEconomy);
   $$('[data-action="print"]').forEach(b=>b.onclick=()=>window.print());
+  $('[data-action="new-position-code"]')?.addEventListener('click',()=>positionCodeModal());
+  $('[data-action="save-salary-table"]')?.addEventListener('click',saveSalaryTable);
+  $$('[data-edit-position-code]').forEach(b=>b.onclick=()=>positionCodeModal(positionCodeById(b.dataset.editPositionCode)));
   $('[data-action="new-wagetype"]')?.addEventListener('click',()=>wageTypeModal());
   $$('[data-edit-wagetype]').forEach(b=>b.onclick=()=>wageTypeModal(wageTypeById(b.dataset.editWagetype)));
   $('[data-action="export-backup"]')?.addEventListener('click',exportBackup);
@@ -1081,6 +1231,7 @@ function openModal(title,body,footer=''){
   $('#saveEmployeeBtn')?.addEventListener('click',saveEmployee);
   $('#saveRunBtn')?.addEventListener('click',saveRun);
   $('#saveWageTypeBtn')?.addEventListener('click',saveWageType);
+  $('#savePositionCodeBtn')?.addEventListener('click',savePositionCode);
 }
 function closeModal(){$('#modalHost').innerHTML=''}
 function bindFixedRemove(){$$('.remove-fixed').forEach(b=>b.onclick=()=>b.closest('.fixed-item-row').remove())}
@@ -1089,10 +1240,12 @@ function saveEmployee(){
   const f=new FormData(form),id=f.get('id')||uid('emp');
   const old=employeeById(id);
   const fixedItems=$$('.fixed-item-row').map(r=>({id:r.dataset.id||uid('fi'),name:$('.fi-name',r).value.trim(),kind:$('.fi-kind',r).value,amount:Number($('.fi-amount',r).value)})).filter(i=>i.name);
-  const obj={id,employeeNo:String(f.get('employeeNo')).trim(),name:String(f.get('name')).trim(),birthDate:f.get('birthDate'),email:String(f.get('email')||'').trim(),phone:String(f.get('phone')||'').trim(),department:String(f.get('department')).trim(),serviceCode:String(f.get('serviceCode')||'12000'),serviceName:serviceByCode(f.get('serviceCode'))?.name||'',serviceLocation:String(f.get('serviceLocation')||'').trim(),discipline:String(f.get('discipline')||'').trim(),costCenter:String(f.get('costCenter')).trim(),manager:String(f.get('manager')||'').trim(),startDate:f.get('startDate'),endDate:f.get('endDate'),positionTitle:String(f.get('positionTitle')).trim(),employmentType:f.get('employmentType'),salaryType:f.get('salaryType'),positionPercent:Number(f.get('positionPercent')),weeklyHours:Number(f.get('weeklyHours')),annualSalary:Number(f.get('annualSalary')),taxRate:Number(f.get('taxRate')),pensionRate:Number(f.get('pensionRate')),extraTax:Number(f.get('extraTax')),vacationRate:Number(f.get('vacationRate')),status:f.get('status'),fixedItems,deductionPlans:old?.deductionPlans||[]};
+  const positionCodeId=String(f.get('positionCodeId')||''),position=positionCodeById(positionCodeId),useStandardSalary=Boolean(positionCodeId&&f.has('useStandardSalary'));
+  const obj={id,employeeNo:String(f.get('employeeNo')).trim(),name:String(f.get('name')).trim(),birthDate:f.get('birthDate'),email:String(f.get('email')||'').trim(),phone:String(f.get('phone')||'').trim(),department:String(f.get('department')).trim(),serviceCode:String(f.get('serviceCode')||'12000'),serviceName:serviceByCode(f.get('serviceCode'))?.name||'',serviceLocation:String(f.get('serviceLocation')||'').trim(),discipline:String(f.get('discipline')||'').trim(),costCenter:String(f.get('costCenter')).trim(),manager:String(f.get('manager')||'').trim(),startDate:f.get('startDate'),endDate:f.get('endDate'),positionCodeId,useStandardSalary,positionTitle:String(f.get('positionTitle')).trim(),employmentType:f.get('employmentType'),salaryType:f.get('salaryType'),positionPercent:Number(f.get('positionPercent')),weeklyHours:Number(f.get('weeklyHours')),annualSalary:useStandardSalary&&position?Number(position.annualSalary||0):Number(f.get('annualSalary')),taxRate:Number(f.get('taxRate')),pensionRate:Number(f.get('pensionRate')),extraTax:Number(f.get('extraTax')),vacationRate:Number(f.get('vacationRate')),status:f.get('status'),fixedItems,deductionPlans:old?.deductionPlans||[]};
   if(old) Object.assign(old,obj); else {state.employees.push(obj);state.meta.nextEmployeeNo=Math.max(state.meta.nextEmployeeNo,Number(obj.employeeNo)+1)}
-  audit(`${obj.name} ble ${old?'oppdatert':'opprettet'} i ansattregisteret.`,'Systemadministrator');queueSave();closeModal();render();toast('Ansatt lagret');
+  audit(`${obj.name} ble ${old?'oppdatert':'opprettet'} i ansattregisteret${useStandardSalary&&position?` med standardlønn fra stillingskode ${position.code}`:''}.`,'Systemadministrator');queueSave();closeModal();render();toast('Ansatt lagret');
 }
+
 function saveRun(){
   const form=$('#runForm');if(!form.reportValidity())return;const f=new FormData(form);
   const run={id:uid('run'),name:String(f.get('runName')).trim(),period:f.get('runPeriod'),type:f.get('runType'),status:'draft',createdAt:new Date().toISOString()};
